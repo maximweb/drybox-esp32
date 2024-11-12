@@ -1,0 +1,50 @@
+// clang-format off
+
+// Version
+#define VERSION_STRING "alpha" // TODO: replace with current git commit hash
+
+// Serial settings
+#define SERIAL_ENABLED
+#define BAUDRATE 115200
+
+// Pin numbering
+#define BOARD_USES_HW_GPIO_NUMBERS // needed for OneWire
+
+// Display
+#define SSD1306_I2C_ADDRESS 0x3C // 0x3C or 0x3D
+
+// WiFi settings
+#define WIFI_SSID "<your_ssid>"
+#define WIFI_PW "<your_password>"
+#define WIFI_AP_IP <192,168,0,1>
+#define WIFI_AP_MAC <0x00,0x00,0x00,0x00,0x00,0x00>
+#define WIFI_CLIENT_IP <192,168,0,100>
+#define WIFI_SUBNETMASK <255,255,255,0>
+
+// MQTT settings
+#define MQTT_SERVER "<your_mqtt_server>"
+#define MQTT_PORT 1883
+#define MQTT_USER "<your_mqtt_user>"
+#define MQTT_PW "<your_mqtt_password>"
+#define MQTT_TOPIC "drybox"
+// #define MQTT_INTERVAL 1000
+
+// Encoder settings
+#define KY040_BUTTON_PIN D5
+#define KY040_ENCODER_A_PIN D6
+#define KY040_ENCODER_B_PIN D7
+
+// OneWire (DS18B20) settings
+#define ONEWIRE_PIN 7U // use GPIO number instead of D4 ???
+#define DS18B20_RESOLUTION 12 // 9, 10, 11, or 12
+#define DS18B20_TIMEOUT_CONNECTED 2000 // timeout when a sensor is deemed disconnected in ms (uint16_t must not exceed 65535)
+#define DS18B20_INTERVAL_RECONNECT 10000 // interval for reconnect attempts in ms (uint16_t must not exceed 65535)
+// #define DS18B20_DUCT_ID 0
+// #define DS18B20_LEFT_ID 1
+// #define DS18B20_RIGHT_ID 2
+
+// Ui settings
+#define UI_LAYOUT_ROTATION true
+#define UI_LAYOUT Ui::LayoutA
+
+// clang-format on
