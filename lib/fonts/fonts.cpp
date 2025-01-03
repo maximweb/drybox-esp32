@@ -130,6 +130,29 @@ void Number18x32::draw(const char* s, uint8_t x, uint8_t y, char h_alignment)
         }
     }
 
+    if (h_alignment == 'c') {
+        x_char = -(x_char - x) / 2;
+        for (uint8_t i = 0; i < n_chars; i++) {
+            draw_char(s[i], x + x_char, y);
+            if (s[i + 1] == '.' || s[i] == '.') {
+                // less horizontal space for '.'
+                x_char += 14;
+            }
+            else if (s[i] == ' ') {
+                // less horizontal space for ' '
+                x_char += 8;
+            }
+            else if (s[i] == 'C' || s[i] == '%') {
+                // less horizontal space for units
+                x_char += 16;
+            }
+            else {
+                x_char += 18;
+            }
+        }
+        return;
+    }
+
     if (h_alignment == 'r') {
         x_char = x;
         for (uint8_t i = n_chars; i > 0; i--) {
