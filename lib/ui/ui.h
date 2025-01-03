@@ -85,6 +85,10 @@ public:
 
     void set_mqtt_state(MqttState state);
 
+    void set_current_box_temperature(float temperature);
+    void set_current_duct_temperature(float temperature);
+    void set_current_humidity(float humidity);
+
     /**
      * Update internal state and refresh display if necessary.
      */
@@ -94,6 +98,12 @@ private:
     void wifi_symbol(uint8_t strength);
     void wifi_update();
     void mqtt_update();
+
+    void draw_large_number(const char* s, bool invert = false);
+
+    void draw_footer_box_temperature();
+    void draw_footer_humidity();
+    void draw_footer_duct_temperature();
 
     Display& m_display;
     Number8x16 m_n8x16;
@@ -105,6 +115,10 @@ private:
 
     WifiState m_wifi_state{WifiState::WIFIDisconnected};
     MqttState m_mqtt_state{MqttState::MQTTDisconnected};
+
+    float m_current_box_temperature{-127.0f};  // invalid start value
+    float m_current_duct_temperature{-127.0f}; // invalid start value
+    float m_current_humidity{-127.0f};         // invalid start value
 
     bool m_refresh{true};
     unsigned long m_last_update{0};

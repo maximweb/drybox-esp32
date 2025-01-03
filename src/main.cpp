@@ -55,8 +55,8 @@ void setup()
 
     // display
     display.begin();
-    ui.set_layout_switching(false);
     ui.set_layout(Ui::LayoutA);
+    ui.set_layout_switching(true);
 
     // DHT20 humidity sensor
     dht20.begin();
@@ -79,7 +79,6 @@ void setup()
 
 void loop()
 {
-
     // Update wifi state
     if (WiFi.isConnected()) {
         int8_t wifi_rssi = WiFi.RSSI();
@@ -102,22 +101,41 @@ void loop()
         ui.set_wifi_state(Ui::WifiState::WIFIConnecting);
     }
 
-    // DS18B20 own library
+    // Read DHT20 sensor
+    dht20.update();
+    bool dht20_connected{false};
+    if (dht20.is_connected()) {
+        // TODO: how to handle disconnected sensor?
+        dht20_connected = true;
+
+        const auto current_humidity{dht20.relative_humidity()};
+        const auto current_temperature{dht20.temperature()};
+
+        controller.set_current_humidity(current_humidity);
+        ui.set_current_humidity(current_humidity);
+        controller.set_current_box_temperature(current_temperature); // TODO: use avg. value?
+        ui.set_current_box_temperature(current_temperature);         // TODO: use avg. value?
+        // TODO absolute humidity
+    }
+
+    // Read DS18B20 sensors
+    // TODO: how to handle disconnected sensor?
     temp_sensors.update();
-    Serial.print("T ");
+    bool ds18b20_connected[3]{false, false, false};
+    float ds18b20_temperature[3]{0.0f, 0.0f, 0.0f};
     for (uint8_t id = 0; id < 3; id++) {
-        Serial.print(temp_sensors.temperature(id));
         if (temp_sensors.is_connected(id)) {
-            Serial.print(" ");
-        }
-        else {
-            Serial.print("* ");
+            ds18b20_connected[id] = true;
+            ds18b20_temperature[id] = temp_sensors.temperature(id);
         }
     }
-    Serial.println();
-    // delay(500);
+    if (ds18b20_connected[DS18B20_DUCT_ID]) {
+        controller.set_current_duct_temperature(ds18b20_temperature[DS18B20_DUCT_ID]);
+        ui.set_current_duct_temperature(ds18b20_temperature[DS18B20_DUCT_ID]);
+    }
 
-    // encoder.update();
+    // Read button encoder
+    encoder.update();
     // Encoder::Direction enc_direction{encoder.direction()};
     // if (enc_direction != Encoder::Direction::None) {
     //     Serial.println((int8_t) enc_direction);
@@ -142,10 +160,9 @@ void loop()
     // Serial.print("encoder: ");
     // Serial.println((int8_t) encoder.direction());
 
-    dht20.update();
-    // Serial.println(dht20.temperature());
-    // Serial.println(dht20.relative_humidity());
-    // Serial.println(dht20.absolute_humidity());
+    // Update controller
+    controller.update();
 
+    // Update user interface
     ui.update();
 }

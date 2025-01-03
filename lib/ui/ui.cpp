@@ -114,11 +114,144 @@ void Ui::set_mqtt_state(MqttState state)
     }
 }
 
+void Ui::set_current_box_temperature(float temperature)
+{
+    const auto temperature_rounded{round(temperature * 10) / 10.0f};
+
+    if (m_current_box_temperature != temperature_rounded) {
+        m_current_box_temperature = temperature_rounded;
+        m_refresh = true;
+    }
+}
+
+void Ui::set_current_duct_temperature(float temperature)
+{
+    const auto temperature_rounded{round(temperature * 10) / 10.0f};
+
+    if (m_current_duct_temperature != temperature_rounded) {
+        m_current_duct_temperature = temperature_rounded;
+        m_refresh = true;
+    }
+}
+
+void Ui::set_current_humidity(float humidity)
+{
+    const auto humidity_rounded{round(humidity * 10) / 10.0f};
+
+    if (m_current_humidity != humidity_rounded) {
+        m_current_humidity = humidity_rounded;
+        m_refresh = true;
+    }
+}
+
+void Ui::draw_footer_box_temperature()
+{
+    // current box temperature, bottom left
+
+    // draw nothing when invalid
+    if (m_current_box_temperature == -127.0f) {
+        return;
+    }
+
+    // convert float to string
+    char buffer[6];
+    int pixel_offset{0};
+    if (m_current_box_temperature >= 100) {
+        sprintf(buffer, "%.0f", m_current_box_temperature);
+        pixel_offset = 4;
+    }
+    else if (m_current_box_temperature >= 10) {
+        sprintf(buffer, "%.1f", m_current_box_temperature);
+    }
+    else {
+        sprintf(buffer, "%.1f", m_current_box_temperature);
+        pixel_offset = 4;
+    }
+
+    // add unit
+    strcat(buffer, " C");
+
+    // draw
+    m_n8x16.draw(buffer, pixel_offset, 52);
+
+    // m_display.invert_area(0, 50, 42, 63);
+    // m_display.clear_pixel(0, 50);
+    // m_display.clear_pixel(0, 63);
+    // m_display.clear_pixel(42, 50);
+    // m_display.clear_pixel(42, 63);
+}
+
+void Ui::draw_footer_humidity()
+{
+    // current humidity, bottom center
+
+    // draw nothing when invalid
+    if (m_current_humidity == -127.0f) {
+        return;
+    }
+
+    // convert float to string
+    char buffer[5];
+    int pixel_offset{0};
+    if (m_current_humidity >= 100) {
+        pixel_offset = -4;
+    }
+    else if (m_current_humidity >= 10) {
+    }
+    else {
+        pixel_offset = 8;
+    }
+    sprintf(buffer, "%.0f", m_current_humidity);
+
+    // add unit
+    strcat(buffer, " %");
+
+    // draw
+    m_n8x16.draw(buffer, 52 + pixel_offset, 52);
+
+    // m_display.invert_area(51, 50, 81, 63);
+    // m_display.clear_pixel(51, 50);
+    // m_display.clear_pixel(51, 63);
+    // m_display.clear_pixel(81, 50);
+    // m_display.clear_pixel(81, 63);
+}
+
+void Ui::draw_footer_duct_temperature()
+{
+    // current duct temperature, bottom right
+
+    // draw nothing when invalid
+    if (m_current_duct_temperature == -127.0f) {
+        return;
+    }
+
+    // convert float to string
+    char buffer[5];
+    sprintf(buffer, "%.0f", m_current_duct_temperature);
+
+    // add unit
+    strcat(buffer, " C");
+
+    // draw
+    m_n8x16.draw(buffer, 127, 52, 'r');
+
+    // m_display.invert_area(89, 50, 127, 63);
+    // m_display.clear_pixel(89, 50);
+    // m_display.clear_pixel(89, 63);
+    // m_display.clear_pixel(127, 50);
+    // m_display.clear_pixel(127, 63);
+}
+
+void Ui::draw_large_number(const char* s, bool invert)
+{
+    m_n18x32.draw(s, 63, 15, 'c');
+
+    // m_display.invert_area(0, 13, 127, 49);
+}
+
 void Ui::update()
 {
     const auto now{millis()};
-
-    // Serial.println("Ui::update()");
 
     // Bail out early if there is nothing to redraw.
     if ((now - m_last_update) < 15 || !m_refresh) {
@@ -128,6 +261,7 @@ void Ui::update()
     m_last_update = now;
 
     // Switch between different layouts
+    // TODO: make time interval configurable
     if (m_layout_switching && !m_freeze_layout) {
         switch (m_current_layout) {
             case LayoutA:
@@ -147,9 +281,47 @@ void Ui::update()
     }
 
     do {
+        // Clear display
         m_display.clear();
 
+        /*
+         * Common layout elements
+         */
+
         wifi_update();
+
+        draw_footer_box_temperature();
+        draw_footer_duct_temperature();
+        draw_footer_humidity();
+
+        /*
+         * Layout specific elements
+         */
+        char buffer[6];
+        switch (m_current_layout) {
+            case LayoutA:
+                // current box temperature
+                // TODO: similar formatting as in draw_footer_box_temperature() ?
+                if (m_current_box_temperature != -127.0f) {
+                    sprintf(buffer, "%.1f", m_current_box_temperature);
+                    strcat(buffer, " C");
+                    draw_large_number(buffer);
+                }
+                break;
+
+            case LayoutB:
+                // current humidity
+                // TODO: similar formatting as in draw_footer_humidity() ?
+                if (m_current_humidity != -127.0f) {
+                    sprintf(buffer, "%.0f", m_current_humidity);
+                    strcat(buffer, " %");
+                    draw_large_number(buffer);
+                }
+                break;
+
+            default:
+                break;
+        }
 
         // == header test
 
@@ -177,7 +349,7 @@ void Ui::update()
         // m_n18x32.draw("42.5 C", 18, 16);
 
         // current humidity
-        m_n18x32.draw("42.5 %", 18, 15);
+        // m_n18x32.draw("42.5 %", 18, 15);
         // m_display.invert_area(0, 13, 127, 49);
 
         // TODO: set temperature / humidity
@@ -187,36 +359,6 @@ void Ui::update()
 
         // TODO: remaining time "hh:mm h" oder "mm:ss min"
 
-        // == footer test
-
-        // current box temperature, bottom left
-        m_n8x16.draw("78.5 C", 1, 52); // width = 4*8px + 2*4px = 40
-        // m_display.invert_area(0, 50, 42, 63);
-        // m_display.clear_pixel(0, 50);
-        // m_display.clear_pixel(0, 63);
-        // m_display.clear_pixel(42, 50);
-        // m_display.clear_pixel(42, 63);
-
-        // current humidity, horizontally centered between temperatures
-        // width = 2*8px digit + 4px space + 8px percent = 28
-        // free width = 88 - 42 = 46
-        // x_start = 43 + 46/2 - 28/2 = 43 + 23 - 14 = 52
-        m_n8x16.draw("44 %", 52, 52);
-        // m_display.invert_area(51, 50, 81, 63);
-        // m_display.clear_pixel(51, 50);
-        // m_display.clear_pixel(51, 63);
-        // m_display.clear_pixel(81, 50);
-        // m_display.clear_pixel(81, 63);
-
-        // current duct temperature, bottom right
-        m_n8x16.draw("123 C", 126, 52, 'r'); // width = 4*8px + 4px = 36
-        // m_display.invert_area(89, 50, 127, 63);
-        // m_display.clear_pixel(89, 50);
-        // m_display.clear_pixel(89, 63);
-        // m_display.clear_pixel(127, 50);
-        // m_display.clear_pixel(127, 63);
-
         m_display.flush();
-
     } while (m_display.next_segment());
 }
