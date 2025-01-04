@@ -1,10 +1,18 @@
-#include "ui.h"
-#include "fonts.h"
+#include "config.h"
 
-Ui::Ui(Display& display)
+#include "ui.h"
+
+// TODO: reinitialize display every x seconds? prevents misconfiguration on glitches
+
+Ui::Ui(Display& display, Dht20& dht20, Ds18b20& temp_sensors, Ky040& encoder, Button& encoder_button, Controller& controller)
 : m_display{display}
 , m_n8x16{display}
 , m_n18x32{display}
+, m_dht20{dht20}
+, m_temp_sensors{temp_sensors}
+, m_encoder{encoder}
+, m_encoder_button{encoder_button}
+, m_controller{controller}
 {
 }
 
@@ -72,7 +80,7 @@ void Ui::wifi_symbol(uint8_t strength)
     m_display.draw_pixel(x_dot, y_dot);
 }
 
-void Ui::wifi_update()
+void Ui::draw_wifi()
 {
     uint8_t x_circle{119};
     uint8_t y_circle{11};
@@ -106,42 +114,142 @@ void Ui::wifi_update()
     }
 }
 
-void Ui::set_mqtt_state(MqttState state)
+// void Ui::set_mqtt_state(MqttState state)
+// {
+//     if (m_mqtt_state != state) {
+//         m_mqtt_state = state;
+//         m_refresh = true;
+//     }
+// }
+
+void Ui::sensor_update()
 {
-    if (m_mqtt_state != state) {
-        m_mqtt_state = state;
+    // get current time once
+    const auto now{millis()};
+
+    // current dht20 values
+    uint32_t last_seen{m_dht20.last_seen()};
+    if (((now - last_seen) < 60000) && (last_seen > 0)) {
+        // valid sensor data less than 60s old
+        const auto box_temperature{round(m_dht20.temperature() * 10) / 10.0f};
+        const auto humidity{round(m_dht20.relative_humidity())};
+        const auto absolute_humidity{round(m_dht20.absolute_humidity() * 10) / 10.0f};
+
+        if (m_box_temperature != box_temperature) {
+            m_box_temperature = box_temperature;
+            m_refresh = true;
+        }
+        if (m_humidity != humidity) {
+            m_humidity = humidity;
+            m_refresh = true;
+        }
+        if (m_absolute_humidity != absolute_humidity) {
+            m_absolute_humidity = absolute_humidity;
+            m_refresh = true;
+        }
+    }
+    else {
+        // invalid sensor data
+        m_box_temperature = INVALID_FLOAT;
+        m_humidity = INVALID_FLOAT;
+        m_absolute_humidity = INVALID_FLOAT;
+    }
+
+    // current duct temperature
+    last_seen = m_temp_sensors.last_seen(DS18B20_DUCT_ID);
+    if (((now - last_seen) < 6000) && (last_seen > 0)) {
+        // valid sensor data less than 60s old
+        const auto duct_temperature{round(m_temp_sensors.temperature(DS18B20_DUCT_ID) * 10) / 10.0f};
+
+        if (m_duct_temperature != duct_temperature) {
+            m_duct_temperature = duct_temperature;
+            m_refresh = true;
+        }
+    }
+    else {
+        // invalid sensor data
+        m_duct_temperature = INVALID_FLOAT;
+    }
+
+    // controller target values
+    const auto target_temperature{m_controller.get_target_temperature()};
+    const auto target_humidity{m_controller.get_target_humidity()};
+    const auto time_remaining{m_controller.get_time_remaining()};
+    if (m_target_temperature != target_temperature) {
+        m_target_temperature = target_temperature;
+        m_refresh = true;
+    }
+    if (m_target_humidity != target_humidity) {
+        m_target_humidity = target_humidity;
+        m_refresh = true;
+    }
+    if (m_time_remaining != time_remaining) {
+        m_time_remaining = time_remaining;
         m_refresh = true;
     }
 }
 
-void Ui::set_current_box_temperature(float temperature)
+void Ui::draw_target_value()
 {
-    const auto temperature_rounded{round(temperature * 10) / 10.0f};
+    // target temperature/humidity, top left
 
-    if (m_current_box_temperature != temperature_rounded) {
-        m_current_box_temperature = temperature_rounded;
-        m_refresh = true;
+    // early checks
+    if ((m_target_temperature == INVALID_FLOAT) && (m_target_humidity == INVALID_FLOAT)) {
+        // draw nothing when controller is disabled
+        return;
     }
+    if ((m_target_temperature != INVALID_FLOAT) && (m_target_humidity != INVALID_FLOAT)) {
+        // draw nothing when conflicting values
+        return;
+    }
+
+    // convert float to string
+    char buffer[4];
+    if (m_target_temperature != INVALID_FLOAT) {
+        sprintf(buffer, "%.0f C", m_target_temperature);
+    }
+    else {
+        sprintf(buffer, "%.0f %%", m_target_humidity); // literal '%' needs to be escaped
+    }
+
+    // draw
+    m_n8x16.draw(buffer, 27, -2, 'r');
 }
 
-void Ui::set_current_duct_temperature(float temperature)
+void Ui::draw_time_remaining()
 {
-    const auto temperature_rounded{round(temperature * 10) / 10.0f};
+    // time remaining, top right
 
-    if (m_current_duct_temperature != temperature_rounded) {
-        m_current_duct_temperature = temperature_rounded;
-        m_refresh = true;
+    // draw nothing when no duration set or target value not yet reached
+    if (m_time_remaining == 0) {
+        return;
     }
+
+    // convert milliseconds to string
+    // - max time: 99:59 h -> 4.17 days
+    char buffer[7];
+    if (m_time_remaining >= 3600000) { // >= 1 h
+        sprintf(buffer, "%lu:%02lu h", m_time_remaining / 3600000, (m_time_remaining % 3600000) / 60000);
+    }
+    else if (m_time_remaining >= 60000) { // >= 1 min
+        sprintf(buffer, "%lu:%02lu m", m_time_remaining / 60000, (m_time_remaining % 60000) / 1000);
+    }
+    else if (m_time_remaining >= 1000) { // >= 1 s
+        sprintf(buffer, "%lu:%02lu s", m_time_remaining / 1000, (m_time_remaining % 1000) / 10);
+    }
+    else { // < 1 s
+        sprintf(buffer, "0:%lu s", m_time_remaining);
+    }
+
+    // draw
+    m_n8x16.draw(buffer, 95, -2, 'r');
 }
 
-void Ui::set_current_humidity(float humidity)
+void Ui::draw_large_number(const char* s, bool invert)
 {
-    const auto humidity_rounded{round(humidity * 10) / 10.0f};
+    m_n18x32.draw(s, 63, 15, 'c');
 
-    if (m_current_humidity != humidity_rounded) {
-        m_current_humidity = humidity_rounded;
-        m_refresh = true;
-    }
+    // m_display.invert_area(0, 13, 127, 49);
 }
 
 void Ui::draw_footer_box_temperature()
@@ -149,30 +257,22 @@ void Ui::draw_footer_box_temperature()
     // current box temperature, bottom left
 
     // draw nothing when invalid
-    if (m_current_box_temperature == -127.0f) {
+    if (m_box_temperature == INVALID_FLOAT) {
         return;
     }
 
     // convert float to string
     char buffer[6];
     int pixel_offset{0};
-    if (m_current_box_temperature >= 100) {
-        sprintf(buffer, "%.0f", m_current_box_temperature);
-        pixel_offset = 4;
-    }
-    else if (m_current_box_temperature >= 10) {
-        sprintf(buffer, "%.1f", m_current_box_temperature);
+    if (m_box_temperature >= 100) {
+        sprintf(buffer, "%.0f C", m_box_temperature);
     }
     else {
-        sprintf(buffer, "%.1f", m_current_box_temperature);
-        pixel_offset = 4;
+        sprintf(buffer, "%.1f C", m_box_temperature);
     }
 
-    // add unit
-    strcat(buffer, " C");
-
     // draw
-    m_n8x16.draw(buffer, pixel_offset, 52);
+    m_n8x16.draw(buffer, 39, 52, 'r');
 
     // m_display.invert_area(0, 50, 42, 63);
     // m_display.clear_pixel(0, 50);
@@ -186,28 +286,17 @@ void Ui::draw_footer_humidity()
     // current humidity, bottom center
 
     // draw nothing when invalid
-    if (m_current_humidity == -127.0f) {
+    if (m_humidity == INVALID_FLOAT) {
         return;
     }
 
     // convert float to string
-    char buffer[5];
-    int pixel_offset{0};
-    if (m_current_humidity >= 100) {
-        pixel_offset = -4;
-    }
-    else if (m_current_humidity >= 10) {
-    }
-    else {
-        pixel_offset = 8;
-    }
-    sprintf(buffer, "%.0f", m_current_humidity);
-
-    // add unit
-    strcat(buffer, " %");
+    char buffer[6];
+    sprintf(buffer, "%.0f %%", m_humidity); // literal '%' needs to be escaped
 
     // draw
-    m_n8x16.draw(buffer, 52 + pixel_offset, 52);
+    // m_n8x16.draw(buffer, 80, 52, 'l');
+    m_n8x16.draw(buffer, 79, 52, 'r');
 
     // m_display.invert_area(51, 50, 81, 63);
     // m_display.clear_pixel(51, 50);
@@ -221,13 +310,13 @@ void Ui::draw_footer_duct_temperature()
     // current duct temperature, bottom right
 
     // draw nothing when invalid
-    if (m_current_duct_temperature == -127.0f) {
+    if (m_duct_temperature == INVALID_FLOAT) {
         return;
     }
 
     // convert float to string
     char buffer[5];
-    sprintf(buffer, "%.0f", m_current_duct_temperature);
+    sprintf(buffer, "%.0f", m_duct_temperature);
 
     // add unit
     strcat(buffer, " C");
@@ -242,45 +331,81 @@ void Ui::draw_footer_duct_temperature()
     // m_display.clear_pixel(127, 63);
 }
 
-void Ui::draw_large_number(const char* s, bool invert)
-{
-    m_n18x32.draw(s, 63, 15, 'c');
-
-    // m_display.invert_area(0, 13, 127, 49);
-}
-
 void Ui::update()
 {
     const auto now{millis()};
 
     // Bail out early if there is nothing to redraw.
-    if ((now - m_last_update) < 15 || !m_refresh) {
+    if ((now - m_last_update) < 50 || !m_refresh) {
         return;
     }
 
     m_last_update = now;
+    sensor_update();
 
-    // Switch between different layouts
+    // Check encoder button for button press -> menu/confirm
+    const auto menu_button{m_encoder_button.getState()};
+    const auto encoder_direction{m_encoder.direction()};
+    if (m_current_layout < Layout::MenuStart && menu_button == Button::State::LongPress) {
+        // Entering menu
+
+        // TODO: save current layout and m_freeze_layout states (for restore after menu)
+
+        // TODO: Reset encoder counter
+
+        // TODO: freeze layout and set fixed Layout::MenuTemperature
+    }
+    else if (m_current_layout >= Layout::MenuStart && menu_button == Button::State::Click) {
+        // Toggle between different menu items
+    }
+    else if (m_current_layout >= Layout::MenuStart && menu_button == Button::State::Idle && encoder_direction != Encoder::Direction::None) {
+        // Already in menu and encoder was turned
+
+        // reset timeout and update temporary target value
+    }
+    else if (m_current_layout >= Layout::MenuStart && menu_button == Button::State::LongPress) {
+        // Leave menu and save temporary target value
+    }
+    else if (m_current_layout >= Layout::MenuStart && menu_button == Button::State::Idle && encoder_direction == Encoder::Direction::None) {
+        // Leave menu and discard temporary target value -> reset to previous value
+    }
+
+    // Toggle between different layouts
     // TODO: make time interval configurable
     if (m_layout_switching && !m_freeze_layout) {
         switch (m_current_layout) {
-            case LayoutA:
-                if (m_last_layout_switch + 5000 < now) {
-                    m_current_layout = LayoutB;
+            case LayoutBoxTemperature:
+                if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
+                    m_current_layout = LayoutRelHumidity;
                     m_last_layout_switch = now;
                 }
                 break;
-            case LayoutB:
-                if (m_last_layout_switch + 5000 < now) {
-                    m_current_layout = LayoutA;
+            case LayoutRelHumidity:
+                if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
+                    m_current_layout = LayoutDuctTemperature;
                     m_last_layout_switch = now;
                 }
+                break;
+            case LayoutDuctTemperature:
+                if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
+                    m_current_layout = LayoutAbsHumidity;
+                    m_last_layout_switch = now;
+                }
+                break;
+            case LayoutAbsHumidity:
+                if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
+                    m_current_layout = LayoutBoxTemperature;
+                    m_last_layout_switch = now;
+                }
+                break;
             default:
                 break;
         }
     }
 
     do {
+        // Reinitalize display
+        // m_display.begin(); // TODO: will blink too much, do less? or only on layout change?
         // Clear display
         m_display.clear();
 
@@ -288,58 +413,64 @@ void Ui::update()
          * Common layout elements
          */
 
-        wifi_update();
+        /* HEADER
+         * target value: left, width 28px, x=0-27px, ending at 27px
+         * gap: 28-47px (20px)
+         * remaining time: centerered, width 48px, x=48-95px, ending at 95px
+         * gap: 96-115px (20px)
+         * wifi symbol: right, width 11px, x=117-127px, centered at 122px
+         */
+        //
+        draw_wifi();
+
+        // m_target_temperature = 42.5f; // for testing
+        draw_target_value();
+        // m_time_remaining = now; // for testing
+        draw_time_remaining();
+
+        /* FOOTER
+         * box temperature: left, width 40px, x=0-39px, ending at 39px
+         * gap: 40-51px (12px)
+         * humidity: center, width 28px, x=52-79px, ending at 79px
+         * gap: 80-91px (12px)
+         * duct temperature: right, width 36px, x=92-127px, ending at 127px
+         */
 
         draw_footer_box_temperature();
         draw_footer_duct_temperature();
         draw_footer_humidity();
 
         /*
-         * Layout specific elements
+         * Layout specific elements (large number)
          */
         char buffer[6];
         switch (m_current_layout) {
-            case LayoutA:
+            case LayoutBoxTemperature:
                 // current box temperature
+                Serial.println("LayoutBoxTemperature");
+
                 // TODO: similar formatting as in draw_footer_box_temperature() ?
-                if (m_current_box_temperature != -127.0f) {
-                    sprintf(buffer, "%.1f", m_current_box_temperature);
-                    strcat(buffer, " C");
+                if (m_box_temperature != INVALID_FLOAT) {
+                    sprintf(buffer, "%.1f C", m_box_temperature);
                     draw_large_number(buffer);
                 }
                 break;
 
-            case LayoutB:
+            case LayoutRelHumidity:
                 // current humidity
+                Serial.println("LayoutRelHumidity");
+
                 // TODO: similar formatting as in draw_footer_humidity() ?
-                if (m_current_humidity != -127.0f) {
-                    sprintf(buffer, "%.0f", m_current_humidity);
-                    strcat(buffer, " %");
+                if (m_humidity != INVALID_FLOAT) {
+                    sprintf(buffer, "%.0f %%", m_humidity); // literal '%' needs to be escaped
                     draw_large_number(buffer);
                 }
                 break;
 
             default:
+                Serial.println("default layout");
                 break;
         }
-
-        // == header test
-
-        // target temperature/humidity
-        // width = 4*8px + 2*4px = 40
-        m_n8x16.draw("42.5 %", 0, -2);
-
-        // time remaining
-        // TODO a '>' symbol when target temperature not yet reached
-        // TODO: max duration (also in controller and menu): 99:59 h -> 4.17 days
-        // free space 116 - 40 = 76
-        // width_A = 6*8px + 2*4px = 48 + 8 = 56  -> 40 + 76/2 - 56/2 = 40 + 38 - 28 = 50
-        // width_B = 5*8px + 2*4px = 40 + 8 = 48  -> 40 + 76/2 - 48/2 = 40 + 38 - 24 = 54
-        // x_start =
-        m_n8x16.draw(">99:59 h", 50, -2);
-        // m_n8x16.draw("99:59 h", 58, -2);
-        // m_n8x16.draw("59:59 m", 58, -2);
-        // m_display.invert_area(48, 0, 106, 12);
 
         // == main number test
 

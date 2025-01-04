@@ -1,8 +1,9 @@
 #include "config.h"
 
 #include <Arduino.h>
-// #include <PubSubClient.h>
+
 #include <WiFi.h>
+// #include <PubSubClient.h>
 #include <Wire.h>
 
 #include "ds18b20.h"
@@ -26,18 +27,19 @@ Dht20 dht20{&Wire};
 // DS18B20 temperature sensors
 Ds18b20 temp_sensors(ONEWIRE_PIN, DS18B20_RESOLUTION, DS18B20_TIMEOUT_CONNECTED, DS18B20_INTERVAL_RECONNECT);
 
-// User interface
-Ui ui{display};
-
-WiFiClient wifiClient;
-// PubSubClient mqttClient(wifiClient);
-
 // Rotary encoder
 Ky040 encoder(KY040_ENCODER_A_PIN, KY040_ENCODER_B_PIN);
 Button encoder_button(KY040_BUTTON_PIN);
 
 // Controller
 Controller controller(D8, D9); // TODO: which pins? move to config.h
+
+// MQTT
+WiFiClient wifiClient;
+// PubSubClient mqttClient(wifiClient);
+
+// User interface
+Ui ui{display, dht20, temp_sensors, encoder, encoder_button, controller};
 
 void IRAM_ATTR encoder_button_interrupt()
 {
@@ -52,11 +54,6 @@ void setup()
     // serial connection
     Serial.begin(115200);
     // delay(5000);
-
-    // display
-    display.begin();
-    ui.set_layout(Ui::LayoutA);
-    ui.set_layout_switching(true);
 
     // DHT20 humidity sensor
     dht20.begin();
@@ -75,6 +72,11 @@ void setup()
     // Wifi
     WiFi.setAutoReconnect(true);
     WiFi.begin(WIFI_SSID, WIFI_PW);
+
+    // display
+    display.begin();
+    ui.set_layout(Ui::LayoutBoxTemperature);
+    ui.set_layout_switching(true);
 }
 
 void loop()
@@ -112,9 +114,7 @@ void loop()
         const auto current_temperature{dht20.temperature()};
 
         controller.set_current_humidity(current_humidity);
-        ui.set_current_humidity(current_humidity);
         controller.set_current_box_temperature(current_temperature); // TODO: use avg. value?
-        ui.set_current_box_temperature(current_temperature);         // TODO: use avg. value?
         // TODO absolute humidity
     }
 
@@ -131,7 +131,6 @@ void loop()
     }
     if (ds18b20_connected[DS18B20_DUCT_ID]) {
         controller.set_current_duct_temperature(ds18b20_temperature[DS18B20_DUCT_ID]);
-        ui.set_current_duct_temperature(ds18b20_temperature[DS18B20_DUCT_ID]);
     }
 
     // Read button encoder

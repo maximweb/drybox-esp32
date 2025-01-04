@@ -1,8 +1,17 @@
 #pragma once
 
-#include "display.h"
-#include "fonts.h"
 #include <Arduino.h>
+
+#include "button.h"
+#include "controller.h"
+#include "dht20sensor.h"
+#include "display.h"
+#include "ds18b20.h"
+#include "fonts.h"
+#include "ky040.h"
+
+#define INVALID_FLOAT -127.0f
+#define LAYOUT_SWITCH_INTERVAL 2000 // ms
 
 // TODO
 //
@@ -29,12 +38,16 @@ class Ui {
 public:
     /**
      * States for multiple UI layouts.
-     *
      */
     enum Layout : uint8_t {
-        LayoutA = 1,
-        LayoutB = 2,
-        Menu = 3,
+        LayoutBoxTemperature = 0,
+        LayoutRelHumidity = 1,
+        LayoutDuctTemperature = 2,
+        LayoutAbsHumidity = 3,
+        MenuStart = 4, // must be after all layouts and before all menus
+        MenuTemperature = 5,
+        MenuHumidity = 6,
+        MenuTime = 7,
     };
 
     enum MenuState : uint8_t {
@@ -57,7 +70,7 @@ public:
         MQTTConnected = 3,
     };
 
-    Ui(Display& display);
+    Ui(Display& display, Dht20& dht20, Ds18b20& temp_sensors, Ky040& encoder, Button& encoder_button, Controller& controller);
 
     /**
      * Enable/disable layout switching.
@@ -82,12 +95,7 @@ public:
     void set_layout(Layout layout);
 
     void set_wifi_state(WifiState state);
-
-    void set_mqtt_state(MqttState state);
-
-    void set_current_box_temperature(float temperature);
-    void set_current_duct_temperature(float temperature);
-    void set_current_humidity(float humidity);
+    // void set_mqtt_state(MqttState state);
 
     /**
      * Update internal state and refresh display if necessary.
@@ -95,30 +103,46 @@ public:
     void update();
 
 private:
+    Display& m_display;
+    Number8x16 m_n8x16;
+    Number18x32 m_n18x32;
+    bool m_layout_switching{false};
+    bool m_freeze_layout{false};
+    Layout m_current_layout{LayoutBoxTemperature};
+    unsigned long m_last_layout_switch{0};
+    unsigned long m_last_menu_interaction{0};
+
+    Dht20& m_dht20;
+    float m_box_temperature{INVALID_FLOAT};   // invalid start value
+    float m_humidity{INVALID_FLOAT};          // invalid start value
+    float m_absolute_humidity{INVALID_FLOAT}; // invalid start value
+
+    Ds18b20& m_temp_sensors;
+    float m_duct_temperature{INVALID_FLOAT}; // invalid start value
+
+    Ky040& m_encoder;
+    Button& m_encoder_button;
+
+    Controller& m_controller;
+    float m_target_temperature{INVALID_FLOAT}; // invalid start value
+    float m_target_humidity{INVALID_FLOAT};    // invalid start value
+    uint32_t m_time_remaining{0};              // invalid start value
+
     void wifi_symbol(uint8_t strength);
-    void wifi_update();
-    void mqtt_update();
+    void draw_wifi();
+    WifiState m_wifi_state{WifiState::WIFIDisconnected};
+    // void mqtt_update();
+    // MqttState m_mqtt_state{MqttState::MQTTDisconnected};
+    void sensor_update();
+
+    void draw_target_value();
+    void draw_time_remaining();
 
     void draw_large_number(const char* s, bool invert = false);
 
     void draw_footer_box_temperature();
     void draw_footer_humidity();
     void draw_footer_duct_temperature();
-
-    Display& m_display;
-    Number8x16 m_n8x16;
-    Number18x32 m_n18x32;
-    bool m_layout_switching{false};
-    bool m_freeze_layout{false};
-    Layout m_current_layout{LayoutA};
-    unsigned long m_last_layout_switch{0};
-
-    WifiState m_wifi_state{WifiState::WIFIDisconnected};
-    MqttState m_mqtt_state{MqttState::MQTTDisconnected};
-
-    float m_current_box_temperature{-127.0f};  // invalid start value
-    float m_current_duct_temperature{-127.0f}; // invalid start value
-    float m_current_humidity{-127.0f};         // invalid start value
 
     bool m_refresh{true};
     unsigned long m_last_update{0};
