@@ -26,9 +26,9 @@ public:
      */
     virtual void clear() = 0;
 
-    virtual void clear_pixel(uint8_t x, uint8_t y) = 0;
+    virtual void clear_pixel(int16_t x, int16_t y) = 0;
 
-    virtual void clear_area(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t y_end) = 0;
+    virtual void clear_area(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end) = 0;
 
     /**
      * Write the frame buffer to the display.
@@ -47,7 +47,7 @@ public:
      * @param x X coordinate.
      * @param y Y coordinate.
      */
-    virtual void draw_pixel(uint8_t x, uint8_t y) = 0;
+    virtual void draw_pixel(int16_t x, int16_t y) = 0;
 
     /**
      * Draw a bitmap beginning with the top-left corner at (@p x, @p y).
@@ -56,15 +56,15 @@ public:
      * @param y Y corner of the bitmap draw position.
      * @param bitmap Bitmap description.
      */
-    virtual void draw_bitmap(uint8_t x, uint8_t y, Bitmap&& bitmap) = 0;
-    virtual void invert_area(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t y_end) = 0;
+    virtual void draw_bitmap(int16_t x, int16_t y, Bitmap&& bitmap) = 0;
+    virtual void invert_area(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end) = 0;
 
-    virtual void draw_h_line(uint8_t y, uint8_t x_start, uint8_t x_end, char linestyle = '-') = 0;
-    virtual void draw_v_line(uint8_t x, uint8_t y_start, uint8_t y_end, char linestyle = '-') = 0;
+    virtual void draw_h_line(int16_t y, int16_t x_start, int16_t x_end, char linestyle = '-') = 0;
+    virtual void draw_v_line(int16_t x, int16_t y_start, int16_t y_end, char linestyle = '-') = 0;
 
-    virtual void draw_line(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t y_end, char linestyle = '-') = 0;
-    virtual void draw_circle(uint8_t x, uint8_t y, uint8_t radius) = 0;
-    virtual void draw_arc(uint8_t x, uint8_t y, uint8_t radius, uint16_t angle_start, uint16_t angle_end) = 0;
+    virtual void draw_line(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end, char linestyle = '-') = 0;
+    virtual void draw_circle(int16_t x, int16_t y, uint8_t radius) = 0;
+    virtual void draw_arc(int16_t x, int16_t y, uint8_t radius, uint16_t angle_start, uint16_t angle_end) = 0;
 
     // This is slightly unfortunate and fixes all deriving displays to be of
     // this dimension.
@@ -80,20 +80,20 @@ public:
     void begin() final {}
 
     void clear() final {}
-    void clear_pixel(uint8_t x, uint8_t y) final {}
-    void clear_area(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t y_end) final {}
+    void clear_pixel(int16_t x, int16_t y) final {}
+    void clear_area(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end) final {}
 
     void flush() final {}
     bool next_segment() final { return false; }
 
-    void draw_pixel(uint8_t, uint8_t) final {}
-    void draw_bitmap(uint8_t, uint8_t, Bitmap&&) final {}
-    void invert_area(uint8_t, uint8_t, uint8_t, uint8_t) final {}
+    void draw_pixel(int16_t, int16_t) final {}
+    void draw_bitmap(int16_t, int16_t, Bitmap&&) final {}
+    void invert_area(int16_t, int16_t, int16_t, int16_t) final {}
 
-    void draw_h_line(uint8_t y, uint8_t x_start, uint8_t x_end, char linestyle) final {}
-    void draw_v_line(uint8_t x, uint8_t y_start, uint8_t y_end, char linestyle) final {}
-    void draw_line(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t y_end, char linestyle) final {}
+    void draw_h_line(int16_t y, int16_t x_start, int16_t x_end, char linestyle) final {}
+    void draw_v_line(int16_t x, int16_t y_start, int16_t y_end, char linestyle) final {}
+    void draw_line(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end, char linestyle) final {}
 
-    void draw_circle(uint8_t x, uint8_t y, uint8_t radius) final {}
-    void draw_arc(uint8_t x, uint8_t y, uint8_t radius, uint16_t angle_start, uint16_t angle_end) final {}
+    void draw_circle(int16_t x, int16_t y, uint8_t radius) final {}
+    void draw_arc(int16_t x, int16_t y, uint8_t radius, uint16_t angle_start, uint16_t angle_end) final {}
 };

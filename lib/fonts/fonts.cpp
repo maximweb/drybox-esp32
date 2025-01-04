@@ -5,7 +5,7 @@ Number8x16::Number8x16(Display& display)
 {
 }
 
-void Number8x16::draw_char(char c, uint8_t x_start, uint8_t y_start)
+void Number8x16::draw_char(char c, int16_t x_start, int16_t y_start)
 {
     size_t offset{0};
 
@@ -40,13 +40,27 @@ void Number8x16::draw_char(char c, uint8_t x_start, uint8_t y_start)
         // skip unknown characters
         return;
     }
+    // Serial.print("draw_char 8x16: '");
+    // Serial.print(c);
+    // Serial.print("'  offset=");
+    // Serial.print(offset);
+    // Serial.print("  x=");
+    // Serial.print(x_start);
+    // Serial.print("  y=");
+    // Serial.println(y_start);
+
     m_display.draw_bitmap(x_start, y_start, Bitmap{8, 16, (const uint8_t*) (NUMBER_8_16 + 16 * (((uint8_t) offset)))});
 }
 
-void Number8x16::draw(const char* s, uint8_t x, uint8_t y, char h_alignment)
+void Number8x16::draw(const char* s, int16_t x, int16_t y, char h_alignment)
 {
-    uint8_t x_char = x;
+    int16_t x_char = x;
     uint8_t n_chars = 0;
+
+    // Serial.print("draw 8x16: x=");
+    // Serial.print(x);
+    // Serial.print("  h_alignment=");
+    // Serial.println(h_alignment);
 
     for (uint8_t i = 0; s[i] != '\0'; i++) {
         n_chars += 1;
@@ -82,7 +96,7 @@ Number18x32::Number18x32(Display& display)
 {
 }
 
-void Number18x32::draw_char(char c, uint8_t x_start, uint8_t y_start)
+void Number18x32::draw_char(char c, int16_t x_start, int16_t y_start)
 {
     size_t offset{0};
 
@@ -106,9 +120,9 @@ void Number18x32::draw_char(char c, uint8_t x_start, uint8_t y_start)
     }
 }
 
-void Number18x32::draw(const char* s, uint8_t x, uint8_t y, char h_alignment)
+void Number18x32::draw(const char* s, int16_t x, int16_t y, char h_alignment)
 {
-    uint8_t x_char = x;
+    int16_t x_char = x;
     uint8_t n_chars = 0;
 
     for (uint8_t i = 0; s[i] != '\0'; i++) {

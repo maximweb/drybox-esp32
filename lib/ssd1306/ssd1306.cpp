@@ -156,18 +156,29 @@ void Ssd1306::clear()
     }
 }
 
-void Ssd1306::clear_pixel(uint8_t x, uint8_t y)
+void Ssd1306::clear_pixel(int16_t x, int16_t y)
 {
-    if (x > width || y > height)
+    if (x < 0 || y < 0 || x > width || y > height)
         return;
 
     m_buffer[(y / 8) * width + x] &= ~(1 << (y % 8));
 }
 
-void Ssd1306::clear_area(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t y_end)
+void Ssd1306::clear_area(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end)
 {
-    for (uint8_t x = x_start; x <= x_end; x++) {
-        for (uint8_t y = y_start; y <= y_end; y++) {
+    // sort min/max
+    if (x_start > x_end) {
+        int16_t tmp{x_start};
+        x_start = x_end;
+        x_end = tmp;
+    }
+    if (y_start > y_end) {
+        int16_t tmp{y_start};
+        y_start = y_end;
+        y_end = tmp;
+    }
+    for (uint8_t x = max(x_start, (int16_t) 0); x < min(x_end, (int16_t) width); x++) {
+        for (uint8_t y = max(y_start, (int16_t) 0); y < min(y_end, (int16_t) height); y++) {
             clear_pixel(x, y);
         }
     }
@@ -210,7 +221,7 @@ void Ssd1306::flush()
     }
 }
 
-void Ssd1306::draw_pixel(uint8_t x, uint8_t y)
+void Ssd1306::draw_pixel(int16_t x, int16_t y)
 {
     if (x > width || y > height || x < 0 || y < 0)
         return;
@@ -219,7 +230,7 @@ void Ssd1306::draw_pixel(uint8_t x, uint8_t y)
     m_buffer[(y / 8) * width + x] |= (1 << (y % 8));
 }
 
-void Ssd1306::draw_bitmap(uint8_t x, uint8_t y, Bitmap&& bitmap)
+void Ssd1306::draw_bitmap(int16_t x, int16_t y, Bitmap&& bitmap)
 {
     uint8_t byte_width = (bitmap.width + 7) / 8;
 
@@ -233,15 +244,24 @@ void Ssd1306::draw_bitmap(uint8_t x, uint8_t y, Bitmap&& bitmap)
     }
 }
 
-void Ssd1306::invert_area(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t y_end)
+void Ssd1306::invert_area(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end)
 {
-    // flip min/max
-    // clip to display area
-    uint8_t pixel{0};
+    // sort min/max
+    if (x_start > x_end) {
+        int16_t tmp{x_start};
+        x_start = x_end;
+        x_end = tmp;
+    }
+    if (y_start > y_end) {
+        int16_t tmp{y_start};
+        y_start = y_end;
+        y_end = tmp;
+    }
 
-    for (uint8_t y = y_start; y <= y_end; y++) {
-        for (uint8_t x = x_start; x <= x_end; x++) {
-            pixel = m_buffer[(y / 8) * width + x] & (1 << (y % 8));
+    uint8_t pixel{0};
+    for (uint8_t y = max(y_start, (int16_t) 0); y < min(y_end, (int16_t) height); y++) {
+        for (uint8_t x = max(x_start, (int16_t) 0); x < min(x_end, (int16_t) width); x++) {
+            pixel = m_buffer[(y / 8) * width + x] & (1 << (y % 8)); // relevant byte & shifted bit: 0 if off, >0 if on
             if (pixel > 0) {
                 // pixel was on, need to turn it off
                 // m_buffer[(y / 8) * width + x] &= ~(1 << (y % 8));
@@ -256,10 +276,14 @@ void Ssd1306::invert_area(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8
     }
 }
 
-void Ssd1306::draw_h_line(uint8_t y, uint8_t x_start, uint8_t x_end, char linestyle)
+void Ssd1306::draw_h_line(int16_t y, int16_t x_start, int16_t x_end, char linestyle)
 {
-    const uint8_t x_min = x_end > x_start ? x_start : x_end;
-    const uint8_t x_max = x_end > x_start ? x_end : x_start;
+    if (y < 0 || y >= height) {
+        return;
+    }
+
+    const uint8_t x_min = x_end > x_start ? max(x_start, (int16_t) 0) : min(x_end, (int16_t) width);
+    const uint8_t x_max = x_end > x_start ? min(x_end, (int16_t) width) : max(x_start, (int16_t) 0);
 
     for (uint8_t x = x_min; x <= x_max; x++) {
         if (linestyle == '.') {
@@ -276,10 +300,13 @@ void Ssd1306::draw_h_line(uint8_t y, uint8_t x_start, uint8_t x_end, char linest
     }
 }
 
-void Ssd1306::draw_v_line(uint8_t x, uint8_t y_start, uint8_t y_end, char linestyle)
+void Ssd1306::draw_v_line(int16_t x, int16_t y_start, int16_t y_end, char linestyle)
 {
-    const uint8_t y_min = y_end > y_start ? y_start : y_end;
-    const uint8_t y_max = y_end > y_start ? y_end : y_start;
+    if (x < 0 || x >= width) {
+        return;
+    }
+    const uint8_t y_min = y_end > y_start ? max(y_start, (int16_t) 0) : min(y_end, (int16_t) height);
+    const uint8_t y_max = y_end > y_start ? min(y_end, (int16_t) height) : max(y_start, (int16_t) 0);
 
     for (uint8_t y = y_min; y <= y_max; y++) {
         if (linestyle == '.') {
@@ -309,7 +336,7 @@ void Ssd1306::draw_v_line(uint8_t x, uint8_t y_start, uint8_t y_end, char linest
  * @param y_end
  * @param linestyle
  */
-void Ssd1306::draw_line(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t y_end, char linestyle = '-')
+void Ssd1306::draw_line(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end, char linestyle = '-')
 {
     // vertical line
     if (y_start == y_end) {
@@ -331,8 +358,8 @@ void Ssd1306::draw_line(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t
     int16_t err = dx + dy;
     int16_t e2;
 
-    uint8_t x{x_start};
-    uint8_t y{y_start};
+    int16_t x{x_start};
+    int16_t y{y_start};
     while (true) {
         draw_pixel(x, y);
         if (x == x_end && y == y_end) {
@@ -357,7 +384,7 @@ void Ssd1306::draw_line(uint8_t x_start, uint8_t y_start, uint8_t x_end, uint8_t
  * @param y_center y coordinate of circle center
  * @param radius radius of circle
  */
-void Ssd1306::draw_circle(uint8_t x_center, uint8_t y_center, uint8_t radius)
+void Ssd1306::draw_circle(int16_t x_center, int16_t y_center, uint8_t radius)
 {
     /**
      * Andres algorithm (with swapped x and y), as other algorithms result in holes when filling with loop over radius.
@@ -410,7 +437,7 @@ void Ssd1306::draw_circle(uint8_t x_center, uint8_t y_center, uint8_t radius)
  * @param angle_start
  * @param angle_end
  */
-void Ssd1306::draw_arc(uint8_t x_center, uint8_t y_center, uint8_t radius, uint16_t angle_start, uint16_t angle_end)
+void Ssd1306::draw_arc(int16_t x_center, int16_t y_center, uint8_t radius, uint16_t angle_start, uint16_t angle_end)
 {
     /**
      * Andres algorithm (with swapped x and y), as other algorithms result in holes when filling with loop over radius.
