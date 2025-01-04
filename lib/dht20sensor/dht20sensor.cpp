@@ -94,6 +94,10 @@ float Dht20::absolute_humidity()
      * f(T/°C) = relHumidity[%] * 10 ^ (6.498 - 2214 / (T + 286.8)) [in g_water / m^3_moistAir]
      */
 
+    if (m_temperature < -40 || m_temperature > 80) {
+        return INVALID_FLOAT;
+    }
+
     float absolute_humidity = m_humidity * pow(10, 6.498 - 2214 / (m_temperature + 286.8));
 
     return absolute_humidity;
