@@ -92,6 +92,12 @@ float Dht20::absolute_humidity()
      *
      * Approximation (Anotine equation-like) for factor on relative humidity in %
      * f(T/°C) = relHumidity[%] * 10 ^ (6.498 - 2214 / (T + 286.8)) [in g_water / m^3_moistAir]
+     *
+     * Examples:
+     * 20°C, 50% RH -> 8.7 g/m^3
+     * 50°C, 50% RH -> 41.4 g/m^3
+     * 80°C, 20% RH -> 58.2 g/m^3
+     * 80°C, 100% RH -> 290.9 g/m^3
      */
 
     if (m_temperature < -40 || m_temperature > 80) {

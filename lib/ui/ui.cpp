@@ -382,11 +382,12 @@ void Ui::update()
                 break;
             case LayoutRelHumidity:
                 if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
-                    m_current_layout = LayoutDuctTemperature;
+                    m_current_layout = LayoutAbsHumidity;
                     m_last_layout_switch = now;
                 }
                 break;
             case LayoutDuctTemperature:
+                // not included in layout rotation (always in footer)
                 if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
                     m_current_layout = LayoutAbsHumidity;
                     m_last_layout_switch = now;
@@ -443,7 +444,7 @@ void Ui::update()
         /*
          * Layout specific elements (large number)
          */
-        char buffer[6];
+        char buffer[10];
         switch (m_current_layout) {
             case LayoutBoxTemperature:
                 // current box temperature
@@ -453,7 +454,7 @@ void Ui::update()
                 if (m_box_temperature != INVALID_FLOAT) {
                     sprintf(buffer, "%.1f C", m_box_temperature);
                     draw_large_number(buffer);
-                }
+                } // TODO: what to print for invalid values?
                 break;
 
             case LayoutRelHumidity:
@@ -464,7 +465,34 @@ void Ui::update()
                 if (m_humidity != INVALID_FLOAT) {
                     sprintf(buffer, "%.0f %%", m_humidity); // literal '%' needs to be escaped
                     draw_large_number(buffer);
-                }
+                } // TODO: what to print for invalid values?
+                break;
+
+            case LayoutDuctTemperature:
+                // current duct temperature
+                Serial.println("LayoutDuctTemperature");
+
+                if (m_duct_temperature != INVALID_FLOAT) {
+                    sprintf(buffer, "%.0f C", m_duct_temperature);
+                    draw_large_number(buffer);
+                } // TODO: what to print for invalid values?
+                break;
+
+            case LayoutAbsHumidity:
+                // current absolute humidity
+                Serial.println("LayoutAbsHumidity");
+
+                if (m_absolute_humidity != INVALID_FLOAT) {
+                    // Expected values: 0.0 - 290.9 g/m^3
+                    // Realistic values: < 100 g/m^3
+                    if (m_absolute_humidity < 100) {
+                        sprintf(buffer, "%.1f ?", m_absolute_humidity);
+                    }
+                    else {
+                        sprintf(buffer, "%.0f ?", m_absolute_humidity); // TODO: font for g/m3
+                    }
+                    draw_large_number(buffer);
+                } // TODO: what to print for invalid values?
                 break;
 
             default:
