@@ -108,11 +108,14 @@ void Number18x32::draw_char(char c, int16_t x_start, int16_t y_start)
         offset = 10;
         m_display.draw_bitmap(x_start, y_start + 26, Bitmap{18, 6, DOT_18_6});
     }
+    else if (c == '%') {
+        m_display.draw_bitmap(x_start, y_start, Bitmap{16, 22, CHARS_16_22[0]});
+    }
     else if (c == 'C') {
         m_display.draw_bitmap(x_start, y_start, Bitmap{16, 22, CHARS_16_22[1]});
     }
-    else if (c == '%') {
-        m_display.draw_bitmap(x_start, y_start, Bitmap{16, 22, CHARS_16_22[0]});
+    else if (c == '#') {
+        m_display.draw_bitmap(x_start, y_start, Bitmap{16, 22, CHARS_16_22[2]});
     }
     else {
         // skip unknown characters
@@ -138,7 +141,7 @@ void Number18x32::draw(const char* s, int16_t x, int16_t y, char h_alignment)
             // less horizontal space for ' '
             x_char += 8;
         }
-        else if (s[i] == 'C' || s[i] == '%') {
+        else if (s[i] == 'C' || s[i] == '%' || s[i] == '#') {
             // less horizontal space for units
             x_char += 16;
         }
@@ -159,7 +162,7 @@ void Number18x32::draw(const char* s, int16_t x, int16_t y, char h_alignment)
                 // less horizontal space for ' '
                 x_char += 8;
             }
-            else if (s[i] == 'C' || s[i] == '%') {
+            else if (s[i] == 'C' || s[i] == '%' || s[i] == '#') {
                 // less horizontal space for units
                 x_char += 16;
             }
@@ -376,8 +379,8 @@ const PROGMEM uint8_t DIGITS_18_32[10][96] = {
     }
 };
 
-// Characters '%', 'C'
-const PROGMEM uint8_t CHARS_16_22[2][44] = {
+// Characters '%', 'C' 'g/m^3'
+const PROGMEM uint8_t CHARS_16_22[3][44] = {
     {
         0x3c, 0x06, 0x7e, 0x0e, 0xe7, 0x0c, 0xc3, 0x18,
         0xc3, 0x18, 0xc3, 0x30, 0xe7, 0x70, 0x7e, 0x60, 
@@ -393,6 +396,14 @@ const PROGMEM uint8_t CHARS_16_22[2][44] = {
         0xf0, 0x00, 0xf0, 0x00, 0x70, 0x00, 0x78, 0x00, 
 	    0x78, 0x0c, 0x3c, 0x1e, 0x3f, 0xfe, 0x1f, 0xfc,
         0x0f, 0xf8, 0x07, 0xe0,
+    },
+    {
+        0x3a, 0x00, 0x6e, 0x00, 0x6c, 0x00, 0x6c, 0x00,
+        0x38, 0x00, 0x20, 0x00, 0x7c, 0x03, 0x66, 0x0f, 
+        0x3c, 0x3c, 0x00, 0xf0, 0x03, 0xc7, 0x0f, 0x01,
+        0x3c, 0x03, 0xf0, 0x01, 0xc0, 0x07, 0x06, 0xf0, 
+        0x07, 0xf8, 0x06, 0xd8, 0x06, 0xd8, 0x06, 0xd8,
+        0x06, 0xd8, 0x06, 0xd8
     }
 };
 

@@ -486,10 +486,10 @@ void Ui::update()
                     // Expected values: 0.0 - 290.9 g/m^3
                     // Realistic values: < 100 g/m^3
                     if (m_absolute_humidity < 100) {
-                        sprintf(buffer, "%.1f ?", m_absolute_humidity);
+                        sprintf(buffer, "%.1f #", m_absolute_humidity); // use '#' for g/m3 in font
                     }
                     else {
-                        sprintf(buffer, "%.0f ?", m_absolute_humidity); // TODO: font for g/m3
+                        sprintf(buffer, "%.0f #", m_absolute_humidity); // use '#' for g/m3 in font
                     }
                     draw_large_number(buffer);
                 } // TODO: what to print for invalid values?
