@@ -1,9 +1,9 @@
 #pragma once
 
-#include "config.h"
-#include "display.h"
 #include <Arduino.h>
 #include <Wire.h>
+
+#include "display.h"
 
 /**
  * SSD1306 display driver.
