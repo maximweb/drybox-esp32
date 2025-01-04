@@ -1,7 +1,8 @@
 #pragma once
 
-#include "display.h"
 #include <Arduino.h>
+
+#include "display.h"
 
 class Number8x16 {
 public:
@@ -15,7 +16,7 @@ private:
     static constexpr size_t m_image_width{128};
 };
 
-extern const PROGMEM uint8_t NUMBER_8_16[272];
+extern const PROGMEM uint8_t NUMBER_8_16[288];
 
 class Number18x32 {
 public:
