@@ -1,6 +1,5 @@
 #pragma once
 
-#include "config.h"
 #include <Arduino.h>
 
 /**
@@ -20,7 +19,7 @@ public:
     virtual float temperature(uint8_t id) = 0;
 
     /**
-     * Returns the elapsed time in ms since the last successful sensor reading.
+     * Returns the time in ms of the last successful sensor reading.
      */
     virtual unsigned int last_seen(uint8_t id) = 0;
 
