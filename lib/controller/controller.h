@@ -19,6 +19,8 @@
 // Settings for safety
 #define MAX_DUCT_TEMPERATURE 120.0
 
+#define INVALID_FLOAT -127.0f
+
 class Controller {
 public:
     enum ControllerState : uint8_t {
@@ -48,6 +50,9 @@ public:
     void update();
 
     ControllerState get_state();
+    float get_target_temperature();
+    float get_target_humidity();
+    uint32_t get_time_remaining();
 
 private:
     bool switch_pins(bool heater, bool fans);
@@ -57,12 +62,12 @@ private:
 
     ControllerState m_state{ControllerState::Idle};
 
-    float m_current_box_temperature{0};
-    float m_current_duct_temperature{0};
-    float m_current_humidity{0};
+    float m_current_box_temperature{INVALID_FLOAT};
+    float m_current_duct_temperature{INVALID_FLOAT};
+    float m_current_humidity{INVALID_FLOAT};
 
-    float m_target_temperature{0};
-    float m_target_humidity{0};
+    float m_target_temperature{INVALID_FLOAT};
+    float m_target_humidity{INVALID_FLOAT};
 
     uint32_t m_duration{0};            // desired heating/drying duration
     uint32_t m_time_target_reached{0}; // for timed heating/drying
