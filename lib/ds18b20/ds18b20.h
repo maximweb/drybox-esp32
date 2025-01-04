@@ -5,9 +5,12 @@
 
 #include <Arduino.h>
 
-#include "tsensor.h"
 #include <DallasTemperature.h>
 #include <OneWire.h>
+
+#include "tsensor.h"
+
+#define INVALID_FLOAT -127.0f
 
 class Ds18b20 : public TemperatureSensor {
 public:
@@ -29,7 +32,7 @@ private:
     const uint16_t m_interval_reconnect_ms{10000}; // set by constructor
     uint16_t m_conversion_duration_ms{1000};       // set by constructor
     DeviceAddress m_address[3];                    // initialization in begin()
-    float m_last_temperature[3] = {0.0f, 0.0f, 0.0f};
+    float m_last_temperature[3] = {INVALID_FLOAT, INVALID_FLOAT, INVALID_FLOAT};
     unsigned long m_last_seen[3]{0, 0, 0}; // millis of last successfull temperature read
     unsigned long m_last_request{0};       // millis of last temperature request
     unsigned long m_last_reconnect{0};     // millis of last reconnect attempt

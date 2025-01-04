@@ -158,7 +158,7 @@ uint8_t Ds18b20::n_sensors()
 
 unsigned int Ds18b20::last_seen(uint8_t id)
 {
-    return millis() - m_last_seen[id];
+    return m_last_seen[id];
 }
 
 bool Ds18b20::is_connected(uint8_t id)
