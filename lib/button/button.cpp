@@ -4,6 +4,10 @@ Button::Button(uint8_t pin)
 : m_pin{pin}
 , m_button(pin, true, true)
 {
+}
+
+void Button::begin()
+{
     m_button.setClickMs(150);
     m_button.setPressMs(1000);
     m_button.setDebounceMs(30);
@@ -17,6 +21,11 @@ Button::State Button::getState()
     const auto tmp{m_state};
     reset();
     return tmp;
+}
+
+Button::State Button::peekState()
+{
+    return m_state;
 }
 
 void Button::update()

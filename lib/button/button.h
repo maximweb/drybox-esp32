@@ -16,6 +16,9 @@ public:
     Button(uint8_t pin);
 
     State getState();
+    State peekState();
+
+    void begin();
 
     void update();
 

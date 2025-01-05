@@ -133,31 +133,17 @@ void loop()
         controller.set_current_duct_temperature(ds18b20_temperature[DS18B20_DUCT_ID]);
     }
 
-    // Read button encoder
+    // Encoder button and rotary encoder
+    // TODO: why do i need to call update() here when using interrupts?
     encoder.update();
-    // Encoder::Direction enc_direction{encoder.direction()};
-    // if (enc_direction != Encoder::Direction::None) {
-    //     Serial.println((int8_t) enc_direction);
-    // }
-    // delay(10);
+    encoder_button.update();
+    // TODO: at least button must not be read in UI, as it prevents Click for LED outside of UI/Menu
 
-    // encoder_button.update();
-    // Button::State encoder_button_state{encoder_button.getState()};
-    // if (encoder_button_state != Button::State::Idle) {
-    //     switch (encoder_button_state) {
-    //         case Button::State::Click:
-    //             Serial.println("Button Click");
-    //             break;
-    //         case Button::State::DoubleClick:
-    //             Serial.println("Button DoubleClick");
-    //             break;
-    //         case Button::State::LongPress:
-    //             Serial.println("Button LongPress");
-    //             break;
-    //     }
-    // }
-    // Serial.print("encoder: ");
-    // Serial.println((int8_t) encoder.direction());
+    // TODO only allow this when UI not in menu
+    if (encoder_button.peekState() == Button::State::Click && ui.current_layout() < Ui::Layout::MenuStart) {
+        encoder_button.reset();
+        Serial.println("Click outside UI");
+    }
 
     // Update controller
     controller.update();
