@@ -11,6 +11,7 @@
 #include "ky040.h"
 
 #define INVALID_FLOAT -127.0f
+#define INVALID_TIME 1000000000u
 #define LAYOUT_SWITCH_INTERVAL 2000 // ms
 
 // TODO
@@ -44,10 +45,11 @@ public:
         LayoutRelHumidity = 1,
         LayoutDuctTemperature = 2,
         LayoutAbsHumidity = 3,
-        MenuStart = 4, // must be after all layouts and before all menus
-        MenuTemperature = 5,
-        MenuHumidity = 6,
-        MenuTime = 7,
+        LayoutTime = 4,
+        MenuStart = 5, // must be after all layouts and before all menus
+        MenuTemperature = 6,
+        MenuHumidity = 7,
+        MenuTime = 8,
     };
 
     enum MenuState : uint8_t {
@@ -106,11 +108,16 @@ private:
     Display& m_display;
     Number8x16 m_n8x16;
     Number18x32 m_n18x32;
-    bool m_layout_switching{false};
-    bool m_freeze_layout{false};
-    Layout m_current_layout{LayoutBoxTemperature};
-    unsigned long m_last_layout_switch{0};
-    unsigned long m_last_menu_interaction{0};
+    bool m_layout_switching{false};                // enable/disable layout switching
+    bool m_freeze_layout{false};                   // freeze layout setting
+    Layout m_current_layout{LayoutBoxTemperature}; // current layout
+    unsigned long m_last_layout_switch{0};         // millis of last layout switch or menu interaction
+    // menu
+    bool m_orig_freeze_layout{false};                 // original layout freeze state (saved when entering menu)
+    Layout m_orig_layout{LayoutBoxTemperature};       // original layout (saved when entering menu)
+    float m_prelim_target_temperature{INVALID_FLOAT}; // unconfirmed target temperature
+    float m_prelim_target_humidity{INVALID_FLOAT};    // unchanged target humidity
+    uint32_t m_prelim_target_time{INVALID_TIME};      // unchanged target time
 
     Dht20& m_dht20;
     float m_box_temperature{INVALID_FLOAT};   // invalid start value
@@ -138,7 +145,7 @@ private:
     void draw_target_value();
     void draw_time_remaining();
 
-    void draw_large_number(const char* s, bool invert = false);
+    void draw_large_number(const char* s, int16_t x, char h_alignment = 'r', bool invert = false);
 
     void draw_footer_box_temperature();
     void draw_footer_humidity();

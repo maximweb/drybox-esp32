@@ -39,7 +39,10 @@ Ui::Layout Ui::current_layout()
 
 void Ui::set_layout(Layout layout)
 {
-    m_current_layout = layout;
+    // External control of layout switching only when not in menu
+    if ((layout < MenuStart) && (m_current_layout < MenuStart)) {
+        m_current_layout = layout;
+    }
 }
 
 void Ui::set_wifi_state(WifiState state)
@@ -234,22 +237,22 @@ void Ui::draw_time_remaining()
     else if (m_time_remaining >= 60000) { // >= 1 min
         sprintf(buffer, "%lu:%02lu m", m_time_remaining / 60000, (m_time_remaining % 60000) / 1000);
     }
-    else if (m_time_remaining >= 1000) { // >= 1 s
-        sprintf(buffer, "%lu:%02lu s", m_time_remaining / 1000, (m_time_remaining % 1000) / 10);
-    }
-    else { // < 1 s
-        sprintf(buffer, "0:%lu s", m_time_remaining);
+    else {
+        sprintf(buffer, "%lu s", m_time_remaining / 1000);
     }
 
     // draw
     m_n8x16.draw(buffer, 95, -2, 'r');
 }
 
-void Ui::draw_large_number(const char* s, bool invert)
+void Ui::draw_large_number(const char* s, int16_t x, char h_alignment /* = 'r' */, bool invert /* = false */)
 {
-    m_n18x32.draw(s, 63, 15, 'c');
+    m_n18x32.draw(s, x, 15, h_alignment);
 
-    // m_display.invert_area(0, 13, 127, 49);
+    // Invert area (for menu)
+    if (invert) {
+        m_display.invert_area(0, 13, 127, 49);
+    }
 }
 
 void Ui::draw_footer_box_temperature()
@@ -343,31 +346,221 @@ void Ui::update()
     m_last_update = now;
     sensor_update();
 
+    /*
+     * Menu interaction
+     */
+
     // Check encoder button for button press -> menu/confirm
-    const auto menu_button{m_encoder_button.getState()};
-    const auto encoder_direction{m_encoder.direction()};
+    // We do not consume the states unless we use them
+    // Therefore, we use peek and reset the state in the respective cases
+    const auto menu_button{m_encoder_button.peekState()};
+    const auto encoder_direction{m_encoder.peekDirection()};
+    Serial.print("Menu button: ");
+    Serial.println((int8_t) menu_button);
+    Serial.print("Encoder direction: ");
+    Serial.println((int8_t) encoder_direction);
     if (m_current_layout < Layout::MenuStart && menu_button == Button::State::LongPress) {
         // Entering menu
+        m_encoder_button.reset(); // consume button state
 
-        // TODO: save current layout and m_freeze_layout states (for restore after menu)
+        // Save current layout states (for restore after menu)
+        m_orig_layout = m_current_layout;
+        m_orig_freeze_layout = m_freeze_layout;
 
-        // TODO: Reset encoder counter
+        // Reset encoder direction
+        m_encoder.reset(); // reset encoder direction
 
-        // TODO: freeze layout and set fixed Layout::MenuTemperature
+        // Freeze layout and set fixed Layout::MenuTemperature
+        m_freeze_layout = true;
+        m_current_layout = Layout::MenuTemperature;
+        m_last_layout_switch = now; // reset and use as menu timeout
+
+        // Set preliminary target values to current target values
+        m_prelim_target_temperature = m_target_temperature;
+        m_prelim_target_humidity = m_target_humidity;
+        m_prelim_target_time = m_time_remaining;
     }
     else if (m_current_layout >= Layout::MenuStart && menu_button == Button::State::Click) {
         // Toggle between different menu items
+        m_encoder_button.reset(); // reset button state
+        m_encoder.reset();        // reset encoder direction
+
+        switch (m_current_layout) {
+            case Layout::MenuTemperature:
+                // only switch to next menu itemif preliminary target temperature is set
+                if (m_prelim_target_temperature != INVALID_FLOAT) {
+                    m_current_layout = Layout::MenuTime;
+                }
+                break;
+            // case Layout::MenuHumidity:
+            //     if (m_prelim_target_humidity != INVALID_FLOAT) {
+            //         m_current_layout = Layout::MenuTime;
+            //     }
+            //     break;
+            case Layout::MenuTime:
+                m_current_layout = Layout::MenuTemperature;
+                break;
+            default:
+                break;
+        }
+
+        m_last_layout_switch = now;
     }
     else if (m_current_layout >= Layout::MenuStart && menu_button == Button::State::Idle && encoder_direction != Encoder::Direction::None) {
         // Already in menu and encoder was turned
+        m_encoder.reset(); // consume encoder direction
 
-        // reset timeout and update temporary target value
+        // Update temporary target value
+        // Allow 20 to 75 °C
+        // TODO: Allow 20 to 80 %RH ???
+        // Allow 00:01 to 99:59 h
+        switch (m_current_layout) {
+            case Layout::MenuTemperature:
+                // Update temporary target temperature
+                if (encoder_direction >= Encoder::Direction::ClockwiseSlow) {
+                    if (m_prelim_target_temperature == INVALID_FLOAT) {
+                        m_prelim_target_temperature = 20.0f; // start at 20 °C
+                    }
+                    else if (m_prelim_target_temperature < 75.0f) {
+                        switch (encoder_direction) {
+                            case Encoder::Direction::ClockwiseSlow:
+                                m_prelim_target_temperature += 1.0f;
+                                break;
+                            case Encoder::Direction::Clockwise:
+                                m_prelim_target_temperature += 2.0f;
+                                break;
+                            case Encoder::Direction::ClockwiseFast:
+                                m_prelim_target_temperature += 5.0f;
+                                break;
+                        }
+                        m_prelim_target_temperature = min(m_prelim_target_temperature, 75.0f);
+                    }
+                }
+                else if (encoder_direction <= Encoder::Direction::CounterClockwiseSlow) {
+                    if (m_prelim_target_temperature <= 20.0f) {
+                        // set to invalid value
+                        m_prelim_target_temperature = INVALID_FLOAT;
+                    }
+                    else {
+                        switch (encoder_direction) {
+                            case Encoder::Direction::CounterClockwiseSlow:
+                                m_prelim_target_temperature -= 1.0f;
+                                break;
+                            case Encoder::Direction::CounterClockwise:
+                                m_prelim_target_temperature -= 2.0f;
+                                break;
+                            case Encoder::Direction::CounterClockwiseFast:
+                                m_prelim_target_temperature -= 5.0f;
+                                break;
+                        }
+                        m_prelim_target_temperature = max(m_prelim_target_temperature, 20.0f);
+                    }
+                }
+
+                break;
+
+            case Layout::MenuHumidity:
+                // TODO: unused for now
+                break;
+
+            case Layout::MenuTime:
+                // Update temporary target time
+                // TODO: test what increments are comfortable
+
+                if (encoder_direction >= Encoder::Direction::ClockwiseSlow) {
+                    if (m_prelim_target_time == INVALID_TIME) {
+                        m_prelim_target_time = 60000; // start at 1 h
+                    }
+                    else {
+                        switch (encoder_direction) {
+                            case Encoder::Direction::ClockwiseSlow:
+                                m_prelim_target_time += 60000; // +1 min
+                                break;
+                            case Encoder::Direction::Clockwise:
+                                m_prelim_target_time += 30 * 60000; // +30 min
+                                break;
+                            case Encoder::Direction::ClockwiseFast:
+                                m_prelim_target_time += 120 * 60000; // +2 h
+                                break;
+                        }
+                        // clamp to 99:59 h
+                        m_prelim_target_time = min(m_prelim_target_time, (uint32_t) (99 * 60 * 60000 + 59 * 60000));
+                    }
+                }
+                else if (encoder_direction <= Encoder::Direction::CounterClockwiseSlow) {
+                    if (m_prelim_target_time <= 60000.0f) {
+                        // set to invalid value
+                        m_prelim_target_time = INVALID_TIME;
+                    }
+                    else {
+                        switch (encoder_direction) {
+                            case Encoder::Direction::CounterClockwiseSlow:
+                                m_prelim_target_time -= 60000; // -1 min
+                                break;
+                            case Encoder::Direction::CounterClockwise:
+                                m_prelim_target_time -= 30 * 60000; // -30 min
+                                break;
+                            case Encoder::Direction::CounterClockwiseFast:
+                                m_prelim_target_time -= 120 * 60000; // -2 h
+                                break;
+                        }
+                        if (m_prelim_target_time < 60000) {
+                            // set to invalid value
+                            m_prelim_target_time = INVALID_TIME;
+                        }
+                    }
+                }
+
+                break;
+
+            default:
+                break;
+        }
+
+        // reset timeout
+        m_last_layout_switch = now;
     }
     else if (m_current_layout >= Layout::MenuStart && menu_button == Button::State::LongPress) {
-        // Leave menu and save temporary target value
+        // Leave menu and save temporary target value to controller
+        m_encoder_button.reset(); // consume button state
+        m_encoder.reset();        // consume encoder direction
+
+        // Save preliminary target values to controller
+        m_controller.set_target_temperature(m_prelim_target_temperature);
+        // m_controller.set_target_humidity(m_prelim_target_humidity);
+        if (m_prelim_target_time != INVALID_TIME) {
+            m_controller.set_duration(m_prelim_target_time / 1000);
+        }
+        else {
+            m_controller.set_duration(0);
+        }
+
+        // Discard temporary target value
+        m_prelim_target_temperature = INVALID_FLOAT;
+        m_prelim_target_humidity = INVALID_FLOAT;
+        m_prelim_target_time = INVALID_TIME;
+
+        // Restore original layout states
+        m_current_layout = m_orig_layout;
+        m_freeze_layout = m_orig_freeze_layout;
+        m_last_layout_switch = now; // reset and use as cycle timer
     }
     else if (m_current_layout >= Layout::MenuStart && menu_button == Button::State::Idle && encoder_direction == Encoder::Direction::None) {
         // Leave menu and discard temporary target value -> reset to previous value
+
+        if ((now - m_last_layout_switch) > 10000) {
+            // Timeout after 10s of inactivity in menu
+
+            // Discard temporary target value
+            m_prelim_target_temperature = INVALID_FLOAT;
+            m_prelim_target_humidity = INVALID_FLOAT;
+            m_prelim_target_time = INVALID_TIME;
+
+            // Restore original layout states
+            m_current_layout = m_orig_layout;
+            m_freeze_layout = m_orig_freeze_layout;
+            m_last_layout_switch = now; // reset and use as cycle timer
+        }
     }
 
     // Toggle between different layouts
@@ -382,12 +575,12 @@ void Ui::update()
                 break;
             case LayoutRelHumidity:
                 if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
-                    m_current_layout = LayoutAbsHumidity;
+                    m_current_layout = LayoutDuctTemperature;
                     m_last_layout_switch = now;
                 }
                 break;
             case LayoutDuctTemperature:
-                // not included in layout rotation (always in footer)
+                // TODO: not included in layout rotation (always in footer)
                 if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
                     m_current_layout = LayoutAbsHumidity;
                     m_last_layout_switch = now;
@@ -395,18 +588,27 @@ void Ui::update()
                 break;
             case LayoutAbsHumidity:
                 if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
+                    // m_current_layout = LayoutBoxTemperature;
+                    m_current_layout = LayoutTime;
+                    m_last_layout_switch = now;
+                }
+                break;
+            case LayoutTime:
+                // TODO: conditional layout switch?
+                if (m_last_layout_switch + LAYOUT_SWITCH_INTERVAL < now) {
                     m_current_layout = LayoutBoxTemperature;
                     m_last_layout_switch = now;
                 }
                 break;
             default:
+                // menu layouts are handled separately
                 break;
         }
     }
 
     do {
         // Reinitalize display
-        // m_display.begin(); // TODO: will blink too much, do less? or only on layout change?
+        m_display.soft_reset(); // reset display settings, reduces glitches
         // Clear display
         m_display.clear();
 
@@ -426,7 +628,7 @@ void Ui::update()
 
         // m_target_temperature = 42.5f; // for testing
         draw_target_value();
-        // m_time_remaining = now; // for testing
+        m_time_remaining = now; // for testing
         draw_time_remaining();
 
         /* FOOTER
@@ -447,52 +649,121 @@ void Ui::update()
         char buffer[10];
         switch (m_current_layout) {
             case LayoutBoxTemperature:
-                // current box temperature
-                Serial.println("LayoutBoxTemperature");
+                // current box temperature 'dd.d C' -> 6 characters
+
+                // Serial.println("LayoutBoxTemperature");
 
                 // TODO: similar formatting as in draw_footer_box_temperature() ?
                 if (m_box_temperature != INVALID_FLOAT) {
                     sprintf(buffer, "%.1f C", m_box_temperature);
-                    draw_large_number(buffer);
+                    draw_large_number(buffer, 115, 'r'); // always right aligned keeps unit in place
                 } // TODO: what to print for invalid values?
                 break;
 
             case LayoutRelHumidity:
-                // current humidity
-                Serial.println("LayoutRelHumidity");
+                // current humidity 'dd %' -> 4 characters
 
-                // TODO: similar formatting as in draw_footer_humidity() ?
+                // Serial.println("LayoutRelHumidity");
+
                 if (m_humidity != INVALID_FLOAT) {
                     sprintf(buffer, "%.0f %%", m_humidity); // literal '%' needs to be escaped
-                    draw_large_number(buffer);
+                    draw_large_number(buffer, 100, 'r');    // always right aligned keeps unit in place
                 } // TODO: what to print for invalid values?
                 break;
 
             case LayoutDuctTemperature:
-                // current duct temperature
-                Serial.println("LayoutDuctTemperature");
+                // current duct temperature 'dd.d C' or 'ddd C' -> 5/6 characters
+
+                // Serial.println("LayoutDuctTemperature");
 
                 if (m_duct_temperature != INVALID_FLOAT) {
-                    sprintf(buffer, "%.0f C", m_duct_temperature);
-                    draw_large_number(buffer);
+                    if (m_duct_temperature >= 100) {
+                        // 'ddd C'
+                        sprintf(buffer, "%.0f C", m_duct_temperature);
+                    }
+                    else {
+                        // 'dd.d C'
+                        sprintf(buffer, "%.1f C", m_duct_temperature);
+                    }
+                    draw_large_number(buffer, 115, 'r'); // always right aligned keeps unit in place
                 } // TODO: what to print for invalid values?
                 break;
 
             case LayoutAbsHumidity:
-                // current absolute humidity
-                Serial.println("LayoutAbsHumidity");
+                // current absolute humidity 'dd.d #' or 'ddd #' -> 5/6 characters
+                // Expected values: 0.0 - 290.9 g/m^3
+                // Realistic values: < 100 g/m^3
+
+                // Serial.println("LayoutAbsHumidity");
 
                 if (m_absolute_humidity != INVALID_FLOAT) {
-                    // Expected values: 0.0 - 290.9 g/m^3
-                    // Realistic values: < 100 g/m^3
                     if (m_absolute_humidity < 100) {
                         sprintf(buffer, "%.1f #", m_absolute_humidity); // use '#' for g/m3 in font
                     }
                     else {
                         sprintf(buffer, "%.0f #", m_absolute_humidity); // use '#' for g/m3 in font
                     }
-                    draw_large_number(buffer);
+                    draw_large_number(buffer, 115, 'r'); // always right aligned keeps unit in place
                 } // TODO: what to print for invalid values?
+                break;
+
+            case LayoutTime:
+                // elapsed/remaining time 'xx:yy h' -> 7 characters
+
+                // Serial.println("LayoutTime");
+
+                // TODO: add + or - indicating elapsed or remaining time
+
+                if (m_time_remaining != 0) {
+                    // convert milliseconds to string
+                    // - max time: 99:59 h -> 4.17 days
+                    if (m_time_remaining >= 3600000) { // >= 1 h
+                        sprintf(buffer, "%lu:%02lu h", m_time_remaining / 3600000, (m_time_remaining % 3600000) / 60000);
+                    }
+                    else if (m_time_remaining >= 60000) { // >= 1 min
+                        sprintf(buffer, "%lu:%02lu m", m_time_remaining / 60000, (m_time_remaining % 60000) / 1000);
+                    }
+                    else {
+                        sprintf(buffer, "%lu s", m_time_remaining / 1000);
+                    }
+                    draw_large_number(buffer, 120, 'r');
+                } // TODO: what to print for invalid values?
+                break;
+
+            /*
+             * Menu specific elements (large number)
+             */
+            case MenuStart:
+                // should not be used -> forward to first menu item
+                m_current_layout = Layout::MenuTemperature;
+                // no break -> fall through
+
+            case MenuTemperature:
+                // show inverted preliminary target temperature 'dd C' -> 4 characters
+
+                if (m_prelim_target_temperature != INVALID_FLOAT) {
+                    sprintf(buffer, "%.0f C", m_prelim_target_temperature);
+                    draw_large_number(buffer, 100, 'r', true); // always right aligned keeps unit in place
+                }
+                else {
+                    draw_large_number("-- C", 100, 'r', true); // always right aligned keeps unit in place
+                }
+                break;
+
+            case MenuHumidity:
+                // TODO: unused for now
+                break;
+            case MenuTime:
+                // show inverted preliminary target time 'xx:yy h' -> 7 characters
+
+                if (m_prelim_target_time != INVALID_TIME) {
+                    sprintf(buffer, "%lu:%02lu h", m_prelim_target_time / 3600000, (m_prelim_target_time % 3600000) / 60000);
+                    draw_large_number(buffer, 120, 'r', true); // always right aligned keeps unit in place
+                }
+                else {
+                    draw_large_number("--:-- h", 120, 'r', true); // always right aligned keeps unit in place
+                }
+
                 break;
 
             default:
@@ -500,24 +771,7 @@ void Ui::update()
                 break;
         }
 
-        // == main number test
-
-        // current temperature
-        // width = 3*18px digits + 12px dot + + 10px space + 16px unit= 54 + 12 + 10 + 16 = 92
-        // centered = 128/2 - 94/2 = 64 - 46 = 18
-        // m_n18x32.draw("42.5 C", 18, 16);
-
-        // current humidity
-        // m_n18x32.draw("42.5 %", 18, 15);
-        // m_display.invert_area(0, 13, 127, 49);
-
-        // TODO: set temperature / humidity
-        // * inverted
-        // * must also support dash
-        // * increments of 0.5
-
-        // TODO: remaining time "hh:mm h" oder "mm:ss min"
-
+        // Update display
         m_display.flush();
     } while (m_display.next_segment());
 }
