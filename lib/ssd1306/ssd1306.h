@@ -14,6 +14,7 @@ public:
     Ssd1306(TwoWire* wire);
 
     void begin() final;
+    void soft_reset() final;
     void clear() final;
     void clear_pixel(int16_t x, int16_t y) final;
     void clear_area(int16_t x_start, int16_t y_start, int16_t x_end, int16_t y_end) final;

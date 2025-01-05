@@ -21,6 +21,8 @@ public:
      */
     virtual void begin() = 0;
 
+    virtual void soft_reset() = 0;
+
     /**
      * Clear the frame buffer.
      */
@@ -78,6 +80,7 @@ public:
 class MockDisplay : public Display {
 public:
     void begin() final {}
+    void soft_reset() final {}
 
     void clear() final {}
     void clear_pixel(int16_t x, int16_t y) final {}

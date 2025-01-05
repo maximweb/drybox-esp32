@@ -44,6 +44,15 @@ void Ssd1306::begin()
     clear();
     flush();
 
+    // Display Settings
+    soft_reset();
+
+    // Set Display On
+    command(0xAF);
+}
+
+void Ssd1306::soft_reset()
+{
     // Set Display Clock Divide Ratio/Oscillator Frequency
     // lower four bits[3:0]: Divide ratio of display clock
     // upper four bits[7:4]: Oscillator frequency; range 0000b - 1111b; RESET=1111b
@@ -144,9 +153,6 @@ void Ssd1306::begin()
 
     // Deactivate scroll
     command(0x2E);
-
-    // Set Display On
-    command(0xAF);
 }
 
 void Ssd1306::clear()
@@ -223,7 +229,7 @@ void Ssd1306::flush()
 
 void Ssd1306::draw_pixel(int16_t x, int16_t y)
 {
-    if (x > width || y > height || x < 0 || y < 0)
+    if (x >= width || y >= height || x < 0 || y < 0)
         return;
 
     // example: first byte 0xFF equals vertical line starting at upper left and 8px length

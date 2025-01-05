@@ -31,4 +31,4 @@ private:
 extern const PROGMEM uint8_t DASH_18_4[12];
 extern const PROGMEM uint8_t DOT_18_6[18];
 extern const PROGMEM uint8_t DIGITS_18_32[10][96];
-extern const PROGMEM uint8_t CHARS_16_22[3][44];
+extern const PROGMEM uint8_t CHARS_16_22[6][66];
