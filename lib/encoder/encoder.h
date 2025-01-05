@@ -8,19 +8,29 @@ class Encoder {
 public:
     enum class Direction {
         None = 0,
-        Clockwise = 1,
-        CounterClockwise = -1,
+        ClockwiseSlow = 1,
+        Clockwise = 2,
+        ClockwiseFast = 3,
+        CounterClockwiseSlow = -1,
+        CounterClockwise = -2,
+        CounterClockwiseFast = -3,
     };
+
+    virtual void begin() = 0;
 
     /**
      * Update encoder state, ideally in an interrupt.
      */
     virtual void update() = 0;
 
+    virtual void reset() = 0;
+
     /**
      * Get current direction.
      */
-    virtual Direction direction() = 0;
+    virtual Direction getDirection() = 0;
+
+    virtual Direction peekDirection() = 0;
 };
 
 /**
@@ -28,6 +38,9 @@ public:
  */
 class MockEncoder : public Encoder {
 public:
+    void begin() final {}
     void update() final {}
-    Direction direction() final { return Direction::None; }
+    void reset() final {}
+    Direction getDirection() final { return Direction::None; }
+    Direction peekDirection() final { return Direction::None; }
 };

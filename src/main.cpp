@@ -62,12 +62,12 @@ void setup()
     pinMode(ONEWIRE_PIN, OUTPUT); // unclear why using m_pin in Ds18b20::begin() does NOT work?
     temp_sensors.begin();
 
-    // Rotary Encoder
+    // Encoder button
+    encoder_button.begin();
     attachInterrupt(KY040_BUTTON_PIN, encoder_button_interrupt, CHANGE);
-    // ESP32Encoder::useInternalWeakPullResistors = puType::up;
-    // encoder.attachFullQuad(digitalPinToGPIONumber(KY040_ENCODER_A_PIN), digitalPinToGPIONumber(KY040_ENCODER_B_PIN));
-    // attachInterrupt(KY040_ENCODER_A_PIN, encoder_interrupt, CHANGE);
-    // attachInterrupt(KY040_ENCODER_B_PIN, encoder_interrupt, CHANGE);
+
+    // Rotary encoder (interrupts in library)
+    encoder.begin();
 
     // Wifi
     WiFi.setAutoReconnect(true);
