@@ -15,7 +15,7 @@ private:
     Display& m_display;
 };
 
-extern const PROGMEM uint8_t NUMBER_8_16[288];
+extern const PROGMEM uint8_t NUMBER_8_16[304];
 
 class Number18x32 {
 public:
