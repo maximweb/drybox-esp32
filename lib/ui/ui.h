@@ -48,13 +48,7 @@ public:
         LayoutTime = 4,
         MenuStart = 5, // must be after all layouts and before all menus
         MenuTemperature = 6,
-        MenuHumidity = 7,
-        MenuTime = 8,
-    };
-
-    enum MenuState : uint8_t {
-        Off = 0,
-
+        MenuTime = 7,
     };
 
     enum WifiState : uint8_t {
@@ -117,7 +111,7 @@ private:
     Layout m_orig_layout{LayoutBoxTemperature};       // original layout (saved when entering menu)
     float m_prelim_target_temperature{INVALID_FLOAT}; // unconfirmed target temperature
     float m_prelim_target_humidity{INVALID_FLOAT};    // unchanged target humidity
-    uint32_t m_prelim_target_time{INVALID_TIME};      // unchanged target time
+    int32_t m_prelim_target_time{INVALID_TIME};       // unchanged target time
 
     Dht20& m_dht20;
     float m_box_temperature{INVALID_FLOAT};   // invalid start value
@@ -133,7 +127,7 @@ private:
     Controller& m_controller;
     float m_target_temperature{INVALID_FLOAT}; // invalid start value
     float m_target_humidity{INVALID_FLOAT};    // invalid start value
-    uint32_t m_time_remaining{0};              // invalid start value
+    int32_t m_time{0};                         // invalid start value
 
     void wifi_symbol(uint8_t strength);
     void draw_wifi();
@@ -143,7 +137,7 @@ private:
     void sensor_update();
 
     void draw_target_value();
-    void draw_time_remaining();
+    void draw_time();
 
     void draw_large_number(const char* s, int16_t x, char h_alignment = 'r', bool invert = false);
 
