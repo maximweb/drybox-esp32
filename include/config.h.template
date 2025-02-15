@@ -1,50 +1,53 @@
 // clang-format off
 
-// Version
-#define VERSION_STRING "alpha" // TODO: replace with current git commit hash
-
 // Serial settings
 #define SERIAL_ENABLED
 #define BAUDRATE 115200
 
-// Pin numbering
-#define BOARD_USES_HW_GPIO_NUMBERS // needed for OneWire
+// Pin remapping
+// OneWire does not currently support default (non GPIO) pin numbers
+// Be aware that e.g. GPIO5(=D2) and D5 cannot be used at the same time because they both refer to the same physical pin
+// #define BOARD_USES_HW_GPIO_NUMBERS // only use when all pins are GPIO numbers (not Dx)
 
 // Display
 #define SSD1306_I2C_ADDRESS 0x3C // 0x3C or 0x3D
 
 // WiFi settings
-#define WIFI_SSID "<your_ssid>"
-#define WIFI_PW "<your_password>"
-#define WIFI_AP_IP <192,168,0,1>
-#define WIFI_AP_MAC <0x00,0x00,0x00,0x00,0x00,0x00>
-#define WIFI_CLIENT_IP <192,168,0,100>
-#define WIFI_SUBNETMASK <255,255,255,0>
+#define WIFI_SSID "your_ssid"
+#define WIFI_PW "your_password"
+#define WIFI_AP_IP 192,168,0,1
+#define WIFI_AP_MAC 0x00,0x00,0x00,0x00,0x00,0x00
+#define WIFI_CLIENT_IP 192,168,0,100
+#define WIFI_SUBNETMASK 255,255,255,0
 
 // MQTT settings
-#define MQTT_SERVER "<your_mqtt_server>"
+#define MQTT_SERVER "your_mqtt_server"
 #define MQTT_PORT 1883
-#define MQTT_USER "<your_mqtt_user>"
-#define MQTT_PW "<your_mqtt_password>"
+#define MQTT_USER "your_mqtt_user"
+#define MQTT_PW "your_mqtt_password"
 #define MQTT_TOPIC "drybox"
-// #define MQTT_INTERVAL 1000
 
 // Encoder settings
-#define KY040_BUTTON_PIN D5
-#define KY040_ENCODER_A_PIN D6
-#define KY040_ENCODER_B_PIN D7
+#define KY040_BUTTON_PIN A1
+#define KY040_ENCODER_A_PIN A3
+#define KY040_ENCODER_B_PIN A2
 
 // OneWire (DS18B20) settings
-#define ONEWIRE_PIN 7U // use GPIO number instead of D4 ???
+#define ONEWIRE_PIN GPIO_NUM_13 // A6 // use GPIO D8=GPIO17 (ESP32 only, only use pins >13 to avoid conflicts with Dx pins)
 #define DS18B20_RESOLUTION 12 // 9, 10, 11, or 12
 #define DS18B20_TIMEOUT_CONNECTED 2000 // timeout when a sensor is deemed disconnected in ms (uint16_t must not exceed 65535)
 #define DS18B20_INTERVAL_RECONNECT 10000 // interval for reconnect attempts in ms (uint16_t must not exceed 65535)
-// #define DS18B20_DUCT_ID 0
-// #define DS18B20_LEFT_ID 1
-// #define DS18B20_RIGHT_ID 2
+#define DS18B20_DUCT_ID 1u
+#define DS18B20_LEFT_ID 0u
+#define DS18B20_RIGHT_ID 2u
 
 // Ui settings
 #define UI_LAYOUT_ROTATION true
-#define UI_LAYOUT Ui::LayoutA
+#define UI_LAYOUT Ui::Layout::LayoutBoxTemperature
+
+// Mosfet pins
+#define LED_PIN D3
+#define FAN_PIN D4
+#define HEATER_PIN D5
 
 // clang-format on
