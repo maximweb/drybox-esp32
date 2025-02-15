@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include "ds18b20.h"
 
 Ds18b20::Ds18b20(uint8_t pin, uint8_t bit_resolution, uint16_t timeout_connected_ms, uint16_t interval_reconnect_ms)
