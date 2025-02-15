@@ -15,6 +15,7 @@
 #include "controller.h"
 #include "dht20sensor.h"
 #include "ky040.h"
+#include "mqtt.h"
 #include "ssd1306.h"
 #include "ui.h"
 
@@ -32,11 +33,11 @@ Ky040 encoder(KY040_ENCODER_A_PIN, KY040_ENCODER_B_PIN);
 Button encoder_button(KY040_BUTTON_PIN);
 
 // Controller
-Controller controller(D8, D9); // TODO: which pins? move to config.h
+Controller controller(HEATER_PIN, FAN_PIN);
 
 // MQTT
 WiFiClient wifiClient;
-// PubSubClient mqttClient(wifiClient);
+MQTT mqttClient(wifiClient, dht20, temp_sensors, controller);
 
 // User interface
 Ui ui{display, dht20, temp_sensors, encoder, encoder_button, controller};
@@ -50,6 +51,10 @@ void setup()
 {
     // Start controller FIRST, as it sets heater and fan off
     controller.begin();
+
+    // LED
+    digitalWrite(LED_PIN, LOW);
+    pinMode(LED_PIN, OUTPUT);
 
     // serial connection
     Serial.begin(115200);
@@ -72,6 +77,9 @@ void setup()
     // Wifi
     WiFi.setAutoReconnect(true);
     WiFi.begin(WIFI_SSID, WIFI_PW);
+
+    // MQTT
+    mqttClient.begin();
 
     // display
     display.begin();
@@ -106,20 +114,15 @@ void loop()
     // Read DHT20 sensor
     dht20.update();
     bool dht20_connected{false};
+    float dht20_temperature{0};
     if (dht20.is_connected()) {
-        // TODO: how to handle disconnected sensor?
         dht20_connected = true;
-
         const auto current_humidity{dht20.relative_humidity()};
-        const auto current_temperature{dht20.temperature()};
-
-        controller.set_current_humidity(current_humidity);
-        controller.set_current_box_temperature(current_temperature); // TODO: use avg. value?
-        // TODO absolute humidity
+        dht20_temperature = dht20.temperature();
+        // Don't pass temperature to controller here, as we average all sensors.
     }
 
     // Read DS18B20 sensors
-    // TODO: how to handle disconnected sensor?
     temp_sensors.update();
     bool ds18b20_connected[3]{false, false, false};
     float ds18b20_temperature[3]{0.0f, 0.0f, 0.0f};
@@ -133,20 +136,46 @@ void loop()
         controller.set_current_duct_temperature(ds18b20_temperature[DS18B20_DUCT_ID]);
     }
 
+    // Average available temperatures and pass to controller
+    uint8_t n_sensors{0};
+    float avg_temperature{0};
+    if (dht20_connected) {
+        avg_temperature += dht20_temperature;
+        n_sensors += 1;
+    }
+    if (ds18b20_connected[DS18B20_LEFT_ID]) {
+        avg_temperature += ds18b20_temperature[DS18B20_LEFT_ID];
+        n_sensors += 1;
+    }
+    if (ds18b20_connected[DS18B20_RIGHT_ID]) {
+        avg_temperature += ds18b20_temperature[DS18B20_RIGHT_ID];
+        n_sensors += 1;
+    }
+    if (n_sensors > 0) {
+        avg_temperature /= n_sensors;
+        controller.set_current_box_temperature(avg_temperature);
+    }
+    else {
+        // No sensor connected, disable controller/heating for safety
+        controller.set_target_temperature(INVALID_FLOAT);
+        controller.set_duration(0);
+    }
+
     // Encoder button and rotary encoder
-    // TODO: why do i need to call update() here when using interrupts?
     encoder.update();
     encoder_button.update();
-    // TODO: at least button must not be read in UI, as it prevents Click for LED outside of UI/Menu
 
-    // TODO only allow this when UI not in menu
+    // Toggle LED (only allow short press when UI not in menu)
     if (encoder_button.peekState() == Button::State::Click && ui.current_layout() < Ui::Layout::MenuStart) {
         encoder_button.reset();
-        Serial.println("Click outside UI");
+        digitalWrite(LED_PIN, digitalRead(LED_PIN) ? LOW : HIGH);
     }
 
     // Update controller
     controller.update();
+
+    // MQTT update
+    mqttClient.update();
 
     // Update user interface
     ui.update();
