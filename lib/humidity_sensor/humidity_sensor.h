@@ -26,7 +26,7 @@ public:
     void update() final {}
     bool is_connected() final { return true; }
     uint32_t last_seen() final { return millis(); }
-    float temperature() final { return -42; }
-    float relative_humidity() final { return -42; }
-    float absolute_humidity() final { return 42; }
+    float temperature() final { return -127.0; }
+    float relative_humidity() final { return -127.0; }
+    float absolute_humidity() final { return -127.0; }
 };
