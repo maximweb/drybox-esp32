@@ -28,11 +28,6 @@ void Controller::set_current_duct_temperature(float temperature)
     m_current_duct_temperature = temperature;
 }
 
-void Controller::set_current_humidity(float humidity)
-{
-    m_current_humidity = humidity;
-}
-
 void Controller::set_target_temperature(float temperature)
 {
     // assume anything below 20C is off
@@ -46,35 +41,11 @@ void Controller::set_target_temperature(float temperature)
         }
         m_target_temperature = min(temperature, (float) 75.0);
     }
-    m_target_humidity = INVALID_FLOAT;
-
-    // update(); // don't do this here, as we want a single point (after update()) to get state for MQTT
-}
-
-void Controller::set_target_humidity(float humidity)
-{
-    // assume anything outside 5 to 95 off
-    // TODO: narrow down to realistic values
-    if (humidity < 5.0 || humidity > 95.0) {
-        m_target_humidity = INVALID_FLOAT;
-    }
-    else {
-        if ((m_target_humidity != INVALID_FLOAT) && (max(min(humidity, (float) 95.0), (float) 5.0) < m_target_humidity)) {
-            // target humidity decreased -> reset timer
-            m_time_target_reached = 0;
-        }
-        m_target_humidity = humidity;
-    }
-    m_target_temperature = INVALID_FLOAT;
-
-    // update(); // don't do this here, as we want a single point (after update()) to get state for MQTT
 }
 
 void Controller::set_duration(uint32_t duration_s)
 {
     m_duration = duration_s * 1000;
-
-    // update(); // don't do this here, as we want a single point (after update()) to get state for MQTT
 }
 
 bool Controller::switch_pins(bool heater, bool fan)
@@ -143,9 +114,13 @@ void Controller::update()
             // ensure heater off, fan off
             switch_pins(HEAT_LOW, FAN_LOW);
 
+            m_time_enabled = 0;
+
             if (m_target_temperature > INVALID_FLOAT) {
                 // begin heating
-                if ((m_target_temperature - m_current_box_temperature) > DELTA_T) {
+                m_time_enabled = now;
+
+                if ((m_target_temperature - m_current_box_temperature) > DELTA_T_LOW) {
                     // target temperature is more than DELTA_T higher than current temperature
                     m_state = ControllerState::Heating;
                     m_time_last_switched = now;
@@ -161,34 +136,15 @@ void Controller::update()
                         // as controller was idle before, no need to enable fans (yet)
                         m_state = ControllerState::HotNoFan;
                     }
-                    m_time_target_reached = now;
+                    if (m_time_target_reached == 0) {
+                        // record time at which target temperature was reached
+                        m_time_target_reached = now;
+                    }
                 }
                 return;
             }
 
-            if (m_target_humidity > INVALID_FLOAT) {
-                // begin drying
-                if ((m_current_humidity - m_target_humidity) > DELTA_H) {
-                    // target humidity is more than DELTA_H lower than current humidity
-                    m_state = ControllerState::Drying;
-                    m_time_last_switched = now;
-                }
-                else {
-                    // target humidity already reached
-                    if (FAN_DELAY == 0) {
-                        // fan always on
-                        m_state = ControllerState::DryFan;
-                    }
-                    else {
-                        // as controller was idle before, no need to enable fans (yet)
-                        m_state = ControllerState::DryNoFan;
-                    }
-                    m_time_target_reached = now;
-                }
-                return;
-            }
-
-            // Reset timers
+            // Reset timers (if we get here)
             m_time_target_reached = 0;
             m_time_last_switched = 0;
 
@@ -198,84 +154,78 @@ void Controller::update()
             // enable fan and heater, if not already on
             switch_pins(HEAT_HIGH, FAN_HIGH);
 
-            // 1. check duct safety
+            // check duct safety
             if (m_current_duct_temperature > MAX_DUCT_TEMPERATURE) {
                 m_state = ControllerState::HotDuctPause;
                 m_time_last_switched = now;
                 return;
             }
 
-            // 2. check if duration is set and reached
+            // check if duration is set and reached
             if ((m_duration != 0) && (m_time_target_reached != 0) && ((now - m_time_target_reached) > m_duration)) {
                 m_state = ControllerState::Cooldown;
                 m_time_last_switched = now;
+                m_time_enabled = 0;
+                m_time_target_reached = 0;
+                m_target_temperature = INVALID_FLOAT;
                 return;
             }
 
-            // 3. check if controller was disabled
-            if ((m_target_temperature == INVALID_FLOAT) && (m_target_humidity == INVALID_FLOAT)) {
+            // check if controller was disabled
+            if (m_target_temperature == INVALID_FLOAT) {
                 m_state = ControllerState::Cooldown;
                 m_time_last_switched = now;
+                m_time_enabled = 0;
+                m_time_target_reached = 0;
                 return;
             }
 
-            // 4. check if controller mode was changed
-            if (m_target_humidity != INVALID_FLOAT) {
-                m_state = ControllerState::Drying;
-                // do not record time of switch
-                return;
-            }
+            // check if target temperature above upper hysteresis limit
+            if ((m_current_box_temperature - m_target_temperature) > DELTA_T_HIGH) {
+                if (m_time_target_reached == 0) {
+                    // reached target temperature for the first time, save start time
+                    m_time_target_reached = now;
+                }
 
-            // 5. check if target temperature reached for the first time -> begin timer
-            if (((m_current_box_temperature - m_target_temperature) > INVALID_FLOAT) && m_time_target_reached == 0) {
-                m_time_target_reached = now;
-            }
-
-            // 6. check if target temperature above upper hysteresis limit
-            if ((m_current_box_temperature - m_target_temperature) > DELTA_T) {
                 m_state = ControllerState::HotFan;
                 m_time_last_switched = now;
-                // won't check for SWITCH_DELAY here, as turning off always immediate
+                // won't check for SWITCH_DELAY here, as turning off is always instant
                 return;
             }
 
             // otherwise, stay in Heating state
-
             break;
 
         case ControllerState::HotDuctPause:
-            // same action as HotFan, only for tracking purposes
+            // pause heating when duct is too hot
+            // same action as HotFan, only for tracking purposes (no break)
         case ControllerState::HotFan:
             // ensure heater off, fan on
             switch_pins(HEAT_LOW, FAN_HIGH);
 
-            // 1. check if duration is set and reached
-            // TODO: make function?
+            // check if duration is set and reached
             if ((m_duration != 0) && (m_time_target_reached != 0) && ((now - m_time_target_reached) > m_duration)) {
                 m_state = ControllerState::Cooldown;
                 m_time_last_switched = now;
+                m_time_enabled = 0;
+                m_time_target_reached = 0;
+                m_target_temperature = INVALID_FLOAT;
                 return;
             }
 
-            // 2. check if controller was disabled
-            // TODO: make function?
-            if ((m_target_temperature == INVALID_FLOAT) && (m_target_humidity == INVALID_FLOAT)) {
+            // check if controller was disabled
+            if (m_target_temperature == INVALID_FLOAT) {
                 m_state = ControllerState::Cooldown;
                 m_time_last_switched = now;
+                m_time_enabled = 0;
+                m_time_target_reached = 0;
                 return;
             }
 
-            // 3. check if controller mode was changed
-            if (m_target_humidity != INVALID_FLOAT) {
-                m_state = ControllerState::DryFan;
-                // do not record time of switch
-                return;
-            }
-
-            // 4. check if SWITCH delay reached and temperature too low
+            // check if SWITCH delay reached and temperature too low
             if ((now - m_time_last_switched) > (SWITCH_DELAY * 1000)) {
                 // SWITCH_DELAY has passed
-                if ((m_target_temperature - m_current_box_temperature) > DELTA_T) {
+                if ((m_target_temperature - m_current_box_temperature) > DELTA_T_LOW) {
                     // below lower hysteresis threshold, go back to heating
                     m_state = ControllerState::Heating;
                     m_time_last_switched = now;
@@ -290,7 +240,6 @@ void Controller::update()
                 // no update of switch timer
                 return;
             }
-
             break;
 
         case ControllerState::HotNoFan:
@@ -302,28 +251,25 @@ void Controller::update()
             if ((m_duration != 0) && (m_time_target_reached != 0) && ((now - m_time_target_reached) > m_duration)) {
                 m_state = ControllerState::Idle;
                 // do not record time of switch
+
+                // TODO
                 return;
             }
 
             // 2. check if controller was disabled
             // TODO: make function?
-            if ((m_target_temperature == INVALID_FLOAT) && (m_target_humidity == INVALID_FLOAT)) {
+            if (m_target_temperature == INVALID_FLOAT) {
                 m_state = ControllerState::Idle;
                 // do not record time of switch
-                return;
-            }
 
-            // 3. check if controller mode was changed
-            if (m_target_humidity != INVALID_FLOAT) {
-                m_state = ControllerState::DryNoFan;
-                // do not record time of switch
+                // TODO disable all timers
                 return;
             }
 
             // 4. check if SWITCH delay reached and temperature too low
             if ((now - m_time_last_switched) > (SWITCH_DELAY * 1000)) {
                 // SWITCH_DELAY has passed
-                if ((m_target_temperature - m_current_box_temperature) > DELTA_T) {
+                if ((m_target_temperature - m_current_box_temperature) > DELTA_T_LOW) {
                     // below lower hysteresis threshold, go back to heating
                     m_state = ControllerState::Heating;
                     m_time_last_switched = now;
@@ -333,25 +279,17 @@ void Controller::update()
 
             break;
 
-        case ControllerState::Drying:
-            break;
-
-        case ControllerState::DryDuctPause:
-            // same action as DryFan, only for tracking purposes
-        case ControllerState::DryFan:
-            break;
-
-        case ControllerState::DryNoFan:
-            break;
-
         case ControllerState::Cooldown:
             // ensure heater off, fan on
             switch_pins(HEAT_LOW, FAN_HIGH);
 
-            // TODO: we will never get out of this state when fan timeout disabled and no new controller setting
-            // should we add a long timeout, e.g. 30 min after which fan turn off?
+            // when FAN timeout is disabled, assume 15 min timeout
+            if ((FAN_DELAY == 0) && ((now - m_time_last_switched) > 15 * 60 * 1000)) {
+                // default fan delay reached -> go back to idle
+                m_state = ControllerState::Idle;
+            }
 
-            // 1. check if FAN timeout
+            // check if FAN timeout was reached
             if ((FAN_DELAY != 0) && ((now - m_time_last_switched) > (FAN_DELAY * 1000))) {
                 // fan delay reached -> go back to idle
                 m_state = ControllerState::Idle;
@@ -362,45 +300,37 @@ void Controller::update()
             // 2. similar behavior as idle, but only go to states with fan enabled
             if (m_target_temperature > INVALID_FLOAT) {
                 // begin heating
-                if ((m_target_temperature - m_current_box_temperature) > DELTA_T) {
+                m_time_enabled = now;
+                if ((m_target_temperature - m_current_box_temperature) > DELTA_T_LOW) {
                     // target temperature is more than DELTA_T higher than current temperature
                     m_state = ControllerState::Heating;
                     m_time_last_switched = now;
                 }
                 else {
-                    // target temperature already reached
+                    // target temperature already exceeded
                     // no need to set time last switched, as heater remains off
                     m_state = ControllerState::HotFan;
-                    m_time_target_reached = now;
+                    if (m_time_target_reached == 0) {
+                        m_time_target_reached = now;
+                    }
                 }
                 return;
             }
 
-            if (m_target_humidity > INVALID_FLOAT) {
-                // begin drying
-                if ((m_current_humidity - m_target_humidity) > DELTA_H) {
-                    // target humidity is more than DELTA_H lower than current humidity
-                    m_state = ControllerState::Drying;
-                    m_time_last_switched = now;
-                }
-                else {
-                    // target humidity already reached
-                    // no need to set time last switched, as heater remains off
-                    m_state = ControllerState::DryFan;
-                    m_time_target_reached = now;
-                }
-                return;
-            }
-
-            // Only reset duration timer, state switch may still be needed for long fan timeout
+            // Stay in Cooldown, ensure that everything is reset
+            m_time_enabled = 0;
             m_time_target_reached = 0;
+            m_target_temperature = INVALID_FLOAT;
 
             break;
 
         default:
-            // unknown state, go for Cooldown for safety
+            // unknown state, go to Cooldown (for safety)
             m_state = ControllerState::Cooldown;
             m_time_last_switched = now;
+            m_time_enabled = 0;
+            m_time_target_reached = 0;
+            m_target_temperature = INVALID_FLOAT;
             break;
     }
 }
@@ -415,12 +345,7 @@ float Controller::get_target_temperature()
     return m_target_temperature;
 }
 
-float Controller::get_target_humidity()
-{
-    return m_target_humidity;
-}
-
-uint32_t Controller::get_time_remaining()
+uint32_t Controller::get_time_remaining() // ms
 {
     const auto now{millis()};
 
@@ -435,4 +360,33 @@ uint32_t Controller::get_time_remaining()
     }
 
     return (m_duration - (now - m_time_target_reached));
+}
+
+uint32_t Controller::get_time_elapsed() // ms
+{
+    const auto now{millis()};
+
+    if (m_time_target_reached == 0) {
+        return 0;
+    }
+
+    // calculate time since target value reached
+    return now - m_time_target_reached;
+}
+
+uint32_t Controller::get_time_start() // ms
+{
+    const auto now{millis()};
+
+    if (m_time_enabled == 0) {
+        return 0;
+    }
+
+    // calculate time since controller enabaled
+    return now - m_time_enabled;
+}
+
+uint32_t Controller::get_duration() // seconds
+{
+    return m_duration / 1000;
 }
